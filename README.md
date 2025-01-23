@@ -9,6 +9,10 @@ A Python script to scrape search results from eBay and output them in a structur
 - Configurable results per keyword and total results limit
 - Clean and structured CSV output
 
+## Development Environment
+- Developed and tested on Ubuntu 24.04.1 LTS (Noble Numbat)
+- Generated using Windsurf Code Editor
+
 ## Installation
 
 1. Clone this repository
