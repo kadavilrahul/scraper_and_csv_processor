@@ -33,7 +33,7 @@ A sample file `Keywords_sample.csv` is provided as a template.
 
 Run the script:
 ```bash
-python main.py
+python3 main.py
 ```
 
 Follow the prompts to:
