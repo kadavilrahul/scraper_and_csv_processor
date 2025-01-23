@@ -15,7 +15,11 @@ A Python script to scrape search results from eBay and output them in a structur
 
 ## Installation
 
-1. Clone this repository
+1. Clone this repository. Run below command on Linux terminal.
+```bash
+git clone https://github.com/kadavilrahul/ebay_scraper.git
+cd ebay_scraper
+```
 2. Install the required packages:
 ```bash
 pip install -r requirements.txt
