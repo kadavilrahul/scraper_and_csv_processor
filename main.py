@@ -9,6 +9,39 @@ import os
 # Default values
 MAX_RESULTS_PER_KEYWORD = 10
 TOTAL_RESULTS = 20
+PRICE_MULTIPLIER = 200  # Default price multiplier
+
+def process_price(price_str):
+    """
+    Process price string to:
+    1. Handle variable prices (take the higher value)
+    2. Remove $ sign
+    3. Multiply by the price multiplier
+    """
+    try:
+        # Remove any whitespace
+        price_str = price_str.strip()
+        
+        # Handle variable prices like "$15.74 to $150.00"
+        if " to " in price_str:
+            # Split and take the higher price
+            prices = price_str.split(" to ")
+            price_str = max(prices, key=lambda x: float(x.replace("$", "").replace(",", "")))
+        
+        # Remove $ sign and any commas
+        price_float = float(price_str.replace("$", "").replace(",", ""))
+        
+        # Get multiplier from environment variable or use default
+        multiplier = float(os.getenv('PRICE_MULTIPLIER', PRICE_MULTIPLIER))
+        
+        # Multiply price
+        final_price = price_float * multiplier
+        
+        # Return formatted price without $ sign
+        return f"{final_price:.2f}"
+    except (ValueError, AttributeError) as e:
+        print(f"Error processing price {price_str}: {e}")
+        return price_str  # Return original string if processing fails
 
 class EbayScraper:
     def __init__(self):
@@ -86,6 +119,7 @@ def main():
     
     print(f"Using max_results_per_keyword: {max_results_per_keyword}")
     print(f"Using total_results_limit: {total_results_limit}")
+    print(f"Using price multiplier: {float(os.getenv('PRICE_MULTIPLIER', PRICE_MULTIPLIER))}")
     
     # Read Keywords.csv file
     words = pd.read_csv('Keywords.csv')
@@ -110,11 +144,13 @@ def main():
                 for i, item in enumerate(results, 1):
                     if total_results_count >= total_results_limit:
                         break
+                    # Process the price before writing to CSV
+                    processed_price = process_price(item['price'])
                     # Create row with new structure
                     row = [
                         item['imagelink'],          # Image
                         item['title'],              # Title
-                        item['price'],              # Regular Price
+                        processed_price,            # Regular Price (processed)
                         search_query,               # Category (using the keyword)
                         '',                         # Short_description (empty for now)
                         ''                          # description (empty for now)
