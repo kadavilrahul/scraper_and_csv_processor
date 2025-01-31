@@ -5,6 +5,10 @@ from urllib.parse import quote_plus
 import pandas as pd
 import csv
 
+# Default values
+MAX_RESULTS_PER_KEYWORD = 10
+TOTAL_RESULTS = 20
+
 class EbayScraper:
     def __init__(self):
         self.base_url = "https://www.ebay.com/sch/i.html?_nkw={}"
@@ -76,8 +80,8 @@ def main():
     output_file = 'output.csv'
 
     # Get user inputs for limits
-    max_results_per_keyword = int(input("Enter maximum number of results per keyword: ") or "500")
-    total_results_limit = int(input("Enter maximum total number of results across all keywords: ") or "5000")
+    max_results_per_keyword = int(input("Enter maximum number of results per keyword: ") or MAX_RESULTS_PER_KEYWORD)
+    total_results_limit = int(input("Enter maximum total number of results across all keywords: ") or TOTAL_RESULTS)
     
     # Read Keywords.csv file
     words = pd.read_csv('Keywords.csv')
