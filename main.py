@@ -4,6 +4,7 @@ import json
 from urllib.parse import quote_plus
 import pandas as pd
 import csv
+import os
 
 # Default values
 MAX_RESULTS_PER_KEYWORD = 10
@@ -79,9 +80,12 @@ def main():
     scraper = EbayScraper()
     output_file = 'output.csv'
 
-    # Get user inputs for limits
-    max_results_per_keyword = int(input("Enter maximum number of results per keyword: ") or MAX_RESULTS_PER_KEYWORD)
-    total_results_limit = int(input("Enter maximum total number of results across all keywords: ") or TOTAL_RESULTS)
+    # Get limits from environment variables or use defaults
+    max_results_per_keyword = int(os.getenv('MAX_RESULTS_PER_KEYWORD', MAX_RESULTS_PER_KEYWORD))
+    total_results_limit = int(os.getenv('TOTAL_RESULTS', TOTAL_RESULTS))
+    
+    print(f"Using max_results_per_keyword: {max_results_per_keyword}")
+    print(f"Using total_results_limit: {total_results_limit}")
     
     # Read Keywords.csv file
     words = pd.read_csv('Keywords.csv')
