@@ -18,15 +18,22 @@ A Python script to scrape search results from eBay and output them in a structur
 1. Clone this repository. Run below command on Linux terminal.
 ```bash
 git clone https://github.com/kadavilrahul/ebay_scraper.git
+```
+2. Navigate to the repository directory:
+```bash
 cd ebay_scraper
 ```
-2. Install the required packages:
+3. Create a virtual environment and activate it:
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+4. Install the required packages:
 ```bash
 pip install -r requirements.txt
 ```
-3. Create a `Keywords.csv` file with your search terms (see `Keywords_sample.csv` for format)
-
-## Input Format
+5. Create or move a `Keywords.csv` file in the current directory with your search terms (see `Keywords_sample.csv` for format)
+Input Format
 
 The script requires a `Keywords.csv` file with the following format:
 ```csv
@@ -37,9 +44,7 @@ Keywords
 ```
 A sample file `Keywords_sample.csv` is provided as a template.
 
-## Usage
-
-Run the script:
+6. Run the script:
 ```bash
 python3 main.py
 ```
