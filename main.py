@@ -5,6 +5,63 @@ import json
 from urllib.parse import quote_plus
 import pandas as pd
 import csv
+import sys
+
+# Gemini AI configuration
+GEMINI_API_KEY = "AIzaSyA5bfenANZwEDV5vfSWWaFWuX4cD2ejJSQ"
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent"
+
+def check_keywords_file():
+    """Check if Keywords.csv exists in the current directory"""
+    if not os.path.exists('Keywords.csv'):
+        print("Error: Keywords.csv file not found in the current directory.")
+        print("Please ensure Keywords.csv is present before running the script.")
+        sys.exit(1)
+    return True
+
+def generate_category_descriptions(category):
+    """
+    Generate short description and full description for a category using Gemini AI
+    """
+    headers = {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': GEMINI_API_KEY
+    }
+    
+    # Prompt for short description
+    short_prompt = f"Give SEO based short description (Who needs it, features, durability, and options, highlight any additional features) in maximum five sentences. The answer should start with the short description, no comments, no suggestions, nothing except the content. Use bullet point as much as possible but not other formats. The item is - : '{category}'"
+    
+    # Prompt for full description
+    full_prompt = f"""Give SEO based detailed description (With focus on benefits, mentioning what is it used for, all features, list key selling points like easy installation, durability, and color options etc, Include keywords: Includes relevant terms for search engine optimization, detailed specifications in bullet points, highlight any additional features. The answer should start with the description without any introduction no comments, no suggestions, nothing except the content. Use headings, bullet points and tables as much as possile. The item is - : '{category}'
+    Keep it professional and informative."""
+    
+    try:
+        # Generate short description
+        short_response = requests.post(
+            GEMINI_BASE_URL,
+            headers=headers,
+            json={
+                "contents": [{"parts":[{"text": short_prompt}]}]
+            }
+        )
+        short_response.raise_for_status()
+        short_description = short_response.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+        
+        # Generate full description
+        full_response = requests.post(
+            GEMINI_BASE_URL,
+            headers=headers,
+            json={
+                "contents": [{"parts":[{"text": full_prompt}]}]
+            }
+        )
+        full_response.raise_for_status()
+        full_description = full_response.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+        
+        return short_description, full_description
+    except Exception as e:
+        print(f"Error generating descriptions for category {category}: {e}")
+        return "", ""
 
 def process_price(price_str, price_multiplier):
     """
@@ -96,6 +153,9 @@ class EbayScraper:
         return items
 
 def main():
+    # First check if Keywords.csv exists
+    check_keywords_file()
+    
     # Get default values from environment variables
     default_max_results = int(os.getenv('MAX_RESULTS_PER_KEYWORD', 10))
     default_total_results = int(os.getenv('TOTAL_RESULTS', 20))
@@ -117,6 +177,9 @@ def main():
     words = pd.read_csv('Keywords.csv')
     total_results_count = 0
 
+    # Dictionary to store category descriptions
+    category_descriptions = {}
+
     with open(output_file, mode='w', newline='', encoding='utf-8') as outfile:
         csv_writer = csv.writer(outfile)
         # Write header with new column structure
@@ -127,6 +190,12 @@ def main():
             if total_results_count >= total_results_limit:
                 print(f"\nReached total results limit of {total_results_limit}. Stopping.")
                 break
+            
+            # Generate descriptions for this category if not already generated
+            if search_query not in category_descriptions:
+                print(f"\nGenerating descriptions for category: {search_query}")
+                short_desc, full_desc = generate_category_descriptions(search_query)
+                category_descriptions[search_query] = (short_desc, full_desc)
                 
             print(f"\nSearching eBay for - {search_query}")
             results = scraper.search(search_query, max_results_per_keyword)
@@ -136,19 +205,25 @@ def main():
                 for i, item in enumerate(results, 1):
                     if total_results_count >= total_results_limit:
                         break
+                    
                     # Process the price using the user-specified multiplier
                     processed_price = process_price(item['price'], price_multiplier)
+                    
+                    # Get the cached descriptions for this category
+                    short_desc, full_desc = category_descriptions[search_query]
+                    
                     # Create row with new structure
                     row = [
                         item['imagelink'],          # Image
                         item['title'],              # Title
                         processed_price,            # Regular Price (processed)
                         search_query,               # Category (using the keyword)
-                        '',                         # Short_description (empty for now)
-                        ''                          # description (empty for now)
+                        short_desc,                 # Short_description
+                        full_desc                   # description
                     ]
                     csv_writer.writerow(row)
                     total_results_count += 1
+                    print(f"Processed item {i} of {len(results)} for {search_query}")
             else:
                 print("No results found.")
         
