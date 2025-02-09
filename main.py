@@ -6,9 +6,13 @@ from urllib.parse import quote_plus
 import pandas as pd
 import csv
 import sys
+from dotenv import load_dotenv
 
+load_dotenv()
 # Gemini AI configuration
-GEMINI_API_KEY = "AIzaSyA5bfenANZwEDV5vfSWWaFWuX4cD2ejJSQ"
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+if not GEMINI_API_KEY:
+    GEMINI_API_KEY = input('Please enter your GEMINI_API_KEY: ')
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent"
 
 def check_keywords_file():

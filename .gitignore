@@ -47,3 +47,5 @@ Keywords.csv
 
 # Ignore all .pid files
 *.pid
+
+.env
