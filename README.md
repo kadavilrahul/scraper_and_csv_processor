@@ -26,6 +26,8 @@ cd ebay_scraper
 3. Create a virtual environment and activate it:
 ```bash
 python3 -m venv venv
+```
+```bash
 source venv/bin/activate
 ```
 4. Install the required packages:
