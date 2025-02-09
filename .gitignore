@@ -36,16 +36,16 @@ output.csv
 Keywords.csv
 .env
 
-# Ignore folder backups
-**/backups/
+# Ignore backups folder
+backups/
 
-# Ignore all .sh files
-*.sh
-
-# Ignore all .log files
+# Ignore shell scripts, log files, and pid files
 *.log
-
-# Ignore all .pid files
 *.pid
+
+# Ignore specific shell script files
+setup_file_versioning.sh
+file_versioning.sh
+check_versioning.sh
 
 .env
