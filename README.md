@@ -40,8 +40,9 @@ python3 main.py
 ```
 
 Follow the prompts to:
-1. Enter the maximum number of results per keyword (default is 500)
-2. Enter the maximum total number of results across all keywords (default is 5000)
+1. Enter the maximum number of results per keyword (default is 10)
+2. Enter the maximum total number of results across all keywords (default is 20)
+3. Enter price multipler (default is 200)
 
 The script will:
 1. Read keywords from Keywords.csv
@@ -51,8 +52,8 @@ The script will:
    - Title (product title)
    - Regular Price (product price)
    - Category (search keyword used)
-   - Short_description (placeholder for future use)
-   - description (placeholder for future use)
+   - Short_description (generated for each category using gemini LLM)
+   - description (generated for each category using gemini LLM)
 
 ## Output Format
 
@@ -61,8 +62,8 @@ The output CSV file contains the following columns:
 - **Title**: Product title from the listing
 - **Regular Price**: Price of the product
 - **Category**: The keyword used to find this product
-- **Short_description**: Reserved for future use
-- **description**: Reserved for future use
+- **Short_description**: Generated for the category
+- **description**: Generated for the category
 
 ## Note
 - The script processes Keywords.csv file for search terms
