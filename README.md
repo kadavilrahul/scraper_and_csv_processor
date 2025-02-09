@@ -14,10 +14,11 @@ A Python script to scrape search results from eBay and output them in a structur
 - Developed and tested on Ubuntu 24.04.1 LTS (Noble Numbat)
 - Generated using Windsurf Code Editor
 
-## Installation
+## Installation (
+Run below commands on Linux terminal
 
 1. Clone this repository, activate python environment and install dependencies
-Run below command on Linux terminal.
+
 ```bash
 git clone https://github.com/kadavilrahul/ebay_scraper.git && cd ebay_scraper && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt
 ```
