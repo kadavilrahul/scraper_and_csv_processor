@@ -1,6 +1,6 @@
 # eBay Scraper
 
-A Python script to scrape search results from eBay and output them in a structured CSV format.
+A Python script to scrape search results from eBay, generate descriptions and output them in a structured CSV format.
 
 ## Features
 - Search eBay products using keywords from Keywords.csv
