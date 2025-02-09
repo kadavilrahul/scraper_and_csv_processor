@@ -8,6 +8,7 @@ A Python script to scrape search results from eBay and output them in a structur
 - Categorize products based on search keywords
 - Configurable results per keyword and total results limit
 - Clean and structured CSV output
+- Generates short and full descriptions using Gemini AI for each category
 
 ## Development Environment
 - Developed and tested on Ubuntu 24.04.1 LTS (Noble Numbat)
@@ -15,26 +16,12 @@ A Python script to scrape search results from eBay and output them in a structur
 
 ## Installation
 
-1. Clone this repository. Run below command on Linux terminal.
+1. Clone this repository, activate python environment and install dependencies
+Run below command on Linux terminal.
 ```bash
-git clone https://github.com/kadavilrahul/ebay_scraper.git
+git clone https://github.com/kadavilrahul/ebay_scraper.git && cd ebay_scraper && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt
 ```
-2. Navigate to the repository directory:
-```bash
-cd ebay_scraper
-```
-3. Create a virtual environment and activate it:
-```bash
-python3 -m venv venv
-```
-```bash
-source venv/bin/activate
-```
-4. Install the required packages:
-```bash
-pip install -r requirements.txt
-```
-5. Create or move a `Keywords.csv` file in the current directory with your search terms (see `Keywords_sample.csv` for format)
+2. Create or move a `Keywords.csv` file in the current directory with your search terms (see `Keywords_sample.csv` for format)
 Input Format
 
 The script requires a `Keywords.csv` file with the following format:
@@ -46,7 +33,7 @@ Keywords
 ```
 A sample file `Keywords_sample.csv` is provided as a template.
 
-6. Run the script:
+3. Run the script:
 ```bash
 python3 main.py
 ```
