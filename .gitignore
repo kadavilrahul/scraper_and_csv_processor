@@ -35,3 +35,15 @@ ENV/
 output.csv
 Keywords.csv
 .env
+
+# Ignore folder backups
+**/backups/
+
+# Ignore all .sh files
+*.sh
+
+# Ignore all .log files
+*.log
+
+# Ignore all .pid files
+*.pid
