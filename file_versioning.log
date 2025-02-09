@@ -1,0 +1,29 @@
+nohup: ignoring input
+Starting file versioning system...
+Watching directory: /home/rahuldineshk/ebay_scraper
+Backup directory: /home/rahuldineshk/ebay_scraper/backups
+PID: 221166
+Setting up watches.
+Watches established.
+2025-02-09 17:16:15 - Backup created: /home/rahuldineshk/ebay_scraper/backups/main.py_2025_02_09_17:16:15
+2025-02-09 17:17:53 - Backup created: /home/rahuldineshk/ebay_scraper/backups/output.csv_2025_02_09_17:17:53
+2025-02-09 17:18:02 - Backup created: /home/rahuldineshk/ebay_scraper/backups/main.py_2025_02_09_17:18:02
+2025-02-09 17:18:55 - Backup created: /home/rahuldineshk/ebay_scraper/backups/main.py_2025_02_09_17:18:55
+2025-02-09 17:19:03 - Backup created: /home/rahuldineshk/ebay_scraper/backups/output.csv_2025_02_09_17:19:03
+2025-02-09 17:21:18 - Backup created: /home/rahuldineshk/ebay_scraper/backups/main.py_2025_02_09_17:21:18
+2025-02-09 17:21:35 - Backup created: /home/rahuldineshk/ebay_scraper/backups/output.csv_2025_02_09_17:21:35
+2025-02-09 17:24:48 - Backup created: /home/rahuldineshk/ebay_scraper/backups/main.py_2025_02_09_17:24:48
+2025-02-09 17:25:10 - Backup created: /home/rahuldineshk/ebay_scraper/backups/output.csv_2025_02_09_17:25:10
+2025-02-09 17:26:02 - Backup created: /home/rahuldineshk/ebay_scraper/backups/output.csv_2025_02_09_17:26:02
+2025-02-09 17:29:40 - Backup created: /home/rahuldineshk/ebay_scraper/backups/main.py_2025_02_09_17:29:40
+2025-02-09 17:29:53 - Backup created: /home/rahuldineshk/ebay_scraper/backups/output.csv_2025_02_09_17:29:53
+2025-02-09 17:30:46 - Backup created: /home/rahuldineshk/ebay_scraper/backups/output.csv_2025_02_09_17:30:46
+2025-02-09 17:31:40 - Backup created: /home/rahuldineshk/ebay_scraper/backups/main.py_2025_02_09_17:31:40
+2025-02-09 17:31:55 - Backup created: /home/rahuldineshk/ebay_scraper/backups/main.py_2025_02_09_17:31:55
+2025-02-09 17:32:03 - Backup created: /home/rahuldineshk/ebay_scraper/backups/output.csv_2025_02_09_17:32:03
+2025-02-09 17:33:08 - Backup created: /home/rahuldineshk/ebay_scraper/backups/main.py_2025_02_09_17:33:08
+2025-02-09 17:33:26 - Backup created: /home/rahuldineshk/ebay_scraper/backups/output.csv_2025_02_09_17:33:26
+2025-02-09 17:33:57 - Backup created: /home/rahuldineshk/ebay_scraper/backups/output.csv_2025_02_09_17:33:57
+2025-02-09 17:36:22 - Backup created: /home/rahuldineshk/ebay_scraper/backups/main.py_2025_02_09_17:36:22
+2025-02-09 17:37:26 - Backup created: /home/rahuldineshk/ebay_scraper/backups/output.csv_2025_02_09_17:37:26
+2025-02-09 17:41:08 - Backup created: /home/rahuldineshk/ebay_scraper/backups/Dockerfile_2025_02_09_17:41:08

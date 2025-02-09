@@ -6,7 +6,12 @@ from urllib.parse import quote_plus
 import pandas as pd
 import csv
 
-def process_price(price_str, price_multiplier):
+# Default values
+MAX_RESULTS_PER_KEYWORD = int(os.getenv('MAX_RESULTS_PER_KEYWORD', 10))
+TOTAL_RESULTS = int(os.getenv('TOTAL_RESULTS', 20))
+PRICE_MULTIPLIER = float(os.getenv('PRICE_MULTIPLIER', 200))
+
+def process_price(price_str):
     """
     Process price string to:
     1. Handle variable prices (take the higher value)
@@ -26,8 +31,11 @@ def process_price(price_str, price_multiplier):
         # Remove $ sign and any commas
         price_float = float(price_str.replace("$", "").replace(",", ""))
         
-        # Multiply price by the provided multiplier
-        final_price = price_float * price_multiplier
+        # Get multiplier from environment variable or use default
+        multiplier = float(os.getenv('PRICE_MULTIPLIER', PRICE_MULTIPLIER))
+        
+        # Multiply price
+        final_price = price_float * multiplier
         
         # Return formatted price without $ sign
         return f"{final_price:.2f}"
@@ -53,6 +61,7 @@ class EbayScraper:
             return []
 
     def _parse_results(self, html, max_results_per_keyword):
+
         if "s-item__image-img" in html: print("YES")
 
         soup = BeautifulSoup(html, 'lxml')
@@ -69,26 +78,31 @@ class EbayScraper:
                 # Extract price
                 price_elem = listing.find('span', {'class': 's-item__price'})
                 price = price_elem.text.strip() if price_elem else "N/A"
+                #price = price.replace("NT", "")
                 price = price.replace("$ ", "$")
 
                 # Get the product image URL
                 image_elem = listing.find("img")
-                imagelink = image_elem.get('data-defer-load')
+                imagelink = image_elem.get('data-defer-load')#.replace("s-l140", "s-l500")
+                #print(new_text)
 
-                # Get the product ID
+                # Get the product product Id
                 prdlink_elem = listing.find("a")
                 prdlink = prdlink_elem.get('href')
                 start_index = prdlink.find("/itm/")
                 end_index = prdlink.find("?")
                 prdid = str(prdlink[start_index+5:end_index])
+                #print(prdlink)
+                #print(prdid)
 
                 if "Shop on eBay" not in title:
-                    items.append({
-                        'title': title,
-                        'prdid': prdid,
-                        'price': price,
-                        'imagelink': imagelink
-                    })
+                  items.append({
+                      'title': title,
+                      'prdid': prdid,
+                      'price': price,
+                      'imagelink': imagelink
+                  })
+                #print(items);
             except Exception as e:
                 print(f"Error parsing item: {e}")
                 continue
@@ -96,22 +110,21 @@ class EbayScraper:
         return items
 
 def main():
-    # Get default values from environment variables
-    default_max_results = int(os.getenv('MAX_RESULTS_PER_KEYWORD', 10))
-    default_total_results = int(os.getenv('TOTAL_RESULTS', 20))
-    default_price_multiplier = float(os.getenv('PRICE_MULTIPLIER', 200))
-
-    # Prompt user for input with defaults from environment variables
-    max_results_per_keyword = int(input(f"Enter the maximum number of results per keyword (default is {default_max_results}): ") or default_max_results)
-    total_results_limit = int(input(f"Enter the maximum total number of results across all keywords (default is {default_total_results}): ") or default_total_results)
-    price_multiplier = float(input(f"Enter the price multiplier (default is {default_price_multiplier}): ") or default_price_multiplier)
+    # Prompt user for input
+    max_results_per_keyword = int(input("Enter the maximum number of results per keyword (default is 10): ") or 10)
+    total_results_limit = int(input("Enter the maximum total number of results across all keywords (default is 20): ") or 20)
+    price_multiplier = float(input("Enter the price multiplier (default is 200): ") or 200)
 
     scraper = EbayScraper()
     output_file = 'output.csv'
+
+    # Get limits from environment variables or use defaults
+    max_results_per_keyword = int(os.getenv('MAX_RESULTS_PER_KEYWORD', MAX_RESULTS_PER_KEYWORD))
+    total_results_limit = int(os.getenv('TOTAL_RESULTS', TOTAL_RESULTS))
     
     print(f"Using max_results_per_keyword: {max_results_per_keyword}")
     print(f"Using total_results_limit: {total_results_limit}")
-    print(f"Using price multiplier: {price_multiplier}")
+    print(f"Using price multiplier: {float(os.getenv('PRICE_MULTIPLIER', PRICE_MULTIPLIER))}")
     
     # Read Keywords.csv file
     words = pd.read_csv('Keywords.csv')
@@ -136,8 +149,8 @@ def main():
                 for i, item in enumerate(results, 1):
                     if total_results_count >= total_results_limit:
                         break
-                    # Process the price using the user-specified multiplier
-                    processed_price = process_price(item['price'], price_multiplier)
+                    # Process the price before writing to CSV
+                    processed_price = process_price(item['price'])
                     # Create row with new structure
                     row = [
                         item['imagelink'],          # Image
