@@ -89,27 +89,29 @@ Make the descriptions engaging and suitable for an e-commerce website."""
 def clean_price(price_str, price_multiplier):
     """
     Clean the price string and multiply by the given price multiplier
-    1. Remove $ and commas
+    1. Remove currency symbols ($ or £) and commas
     2. Convert to float  
     3. Multiply by the price multiplier
+    4. Return as Rs (Indian Rupees)
     """
     try:
         # Remove any whitespace
         price_str = price_str.strip()
         
-        # Handle variable prices like "$15.74 to $150.00"
+        # Handle variable prices like "£15.74 to £150.00" or "$15.74 to $150.00"
         if " to " in price_str:
             # Split and take the higher price
             prices = price_str.split(" to ")
-            price_str = max(prices, key=lambda x: float(x.replace("$", "").replace(",", "")))
+            # Remove currency symbols for comparison
+            price_str = max(prices, key=lambda x: float(x.replace("£", "").replace("$", "").replace(",", "")))
         
-        # Remove $ sign and any commas
-        price_float = float(price_str.replace("$", "").replace(",", ""))
+        # Remove currency symbols (£, $) and any commas
+        price_float = float(price_str.replace("£", "").replace("$", "").replace(",", ""))
         
-        # Multiply price by the provided multiplier
+        # Multiply price by the provided multiplier to convert to Rs
         final_price = price_float * price_multiplier
         
-        # Return formatted price without $ sign
+        # Return formatted price without currency symbol
         return f"{final_price:.2f}"
     except (ValueError, AttributeError) as e:
         print(f"Error processing price {price_str}: {e}")
@@ -117,45 +119,157 @@ def clean_price(price_str, price_multiplier):
 
 class EbayScraper:
     def __init__(self):
-        self.base_url = "https://www.ebay.com/sch/i.html?_nkw={}"
+        # Use eBay UK as it's less restrictive
+        self.base_url = "https://www.ebay.co.uk/sch/i.html?_nkw={}"
+        self.mobile_url = "https://m.ebay.co.uk/sch/i.html?_nkw={}&_sacat=0"
+        self.session = requests.Session()
+        
+        # Standard browser headers
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8',
             'Accept-Encoding': 'gzip, deflate, br',
             'DNT': '1',
             'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'none',
-            'Cache-Control': 'max-age=0'
+            'Upgrade-Insecure-Requests': '1'
         }
+        self.session.headers.update(self.headers)
 
     def search(self, query, max_results_per_keyword):
+        # Try eBay UK desktop version first
+        desktop_results = self._try_desktop_search(query, max_results_per_keyword)
+        if desktop_results:
+            return desktop_results
+            
+        print("Desktop version failed, trying mobile version...")
+        return self._try_mobile_search(query, max_results_per_keyword)
+    
+    def _try_desktop_search(self, query, max_results_per_keyword):
         url = self.base_url.format(quote_plus(query))
+        print(f"Trying eBay UK desktop search: {url}")
         
-        # Try multiple times with different approaches
         for attempt in range(3):
             try:
                 if attempt > 0:
-                    time.sleep(2 * attempt)  # Exponential backoff
-                    
-                response = requests.get(url, headers=self.headers, timeout=10)
+                    print(f"Desktop retry {attempt + 1}...")
+                    time.sleep(2 * attempt)
                 
-                if response.status_code == 503:
-                    print(f"Attempt {attempt + 1}: Got 503 error, retrying...")
-                    continue
-                    
-                response.raise_for_status()
-                return self._parse_results(response.text, max_results_per_keyword)
+                response = self.session.get(url, timeout=20)
                 
-            except requests.RequestException as e:
-                print(f"Attempt {attempt + 1}: Error fetching results: {e}")
-                if attempt == 2:  # Last attempt
-                    return []
-        
+                if response.status_code == 200:
+                    # Check if we're blocked
+                    if "Pardon Our Interruption" in response.text:
+                        print("eBay UK desktop is blocking requests")
+                        continue
+                    return self._parse_results(response.text, max_results_per_keyword)
+                else:
+                    print(f"Desktop attempt {attempt + 1}: Got status {response.status_code}")
+                    
+            except Exception as e:
+                print(f"Desktop attempt {attempt + 1} error: {e}")
+                
         return []
+    
+    def _try_mobile_search(self, query, max_results_per_keyword):
+        url = self.mobile_url.format(quote_plus(query))
+        print(f"Trying mobile eBay UK search: {url}")
+        
+        for attempt in range(2):
+            try:
+                if attempt > 0:
+                    print(f"Mobile retry {attempt + 1}...")
+                    time.sleep(3)
+                
+                response = self.session.get(url, timeout=20)
+                
+                if response.status_code == 200:
+                    return self._parse_mobile_results(response.text, max_results_per_keyword)
+                else:
+                    print(f"Mobile attempt {attempt + 1}: Got status {response.status_code}")
+                    
+            except Exception as e:
+                print(f"Mobile attempt {attempt + 1} error: {e}")
+                
+        return []
+
+    def _parse_mobile_results(self, html, max_results_per_keyword):
+        soup = BeautifulSoup(html, 'lxml')
+        items = []
+        
+        print("Parsing mobile eBay results...")
+        
+        # Mobile eBay uses different structure
+        # Try multiple selectors for mobile
+        mobile_items = soup.find_all('div', class_='s-item')
+        if not mobile_items:
+            mobile_items = soup.find_all('div', {'data-view': 'mi:1686|iid:1'})
+        if not mobile_items:
+            mobile_items = soup.find_all('div', class_='item')
+        
+        print(f"Found {len(mobile_items)} mobile items")
+        
+        for item in mobile_items[:max_results_per_keyword * 2]:
+            try:
+                # Mobile title extraction
+                title = None
+                title_elem = item.find('h3')
+                if not title_elem:
+                    title_elem = item.find('span', class_='it-ttl')
+                if not title_elem:
+                    title_elem = item.find('a')
+                    
+                if title_elem:
+                    title = title_elem.get_text(strip=True)
+                    
+                if not title or len(title) < 5 or "Shop on eBay" in title:
+                    continue
+                
+                # Mobile price extraction
+                price = "N/A"
+                price_elem = item.find('span', class_='notranslate')
+                if not price_elem:
+                    price_elem = item.find('span', string=lambda x: x and '$' in str(x) if x else False)
+                if price_elem:
+                    price = price_elem.get_text(strip=True)
+                
+                # Mobile image extraction
+                imagelink = None
+                img_elem = item.find('img')
+                if img_elem:
+                    imagelink = img_elem.get('src') or img_elem.get('data-src')
+                
+                # Mobile product link
+                link_elem = item.find('a', href=True)
+                prdid = "N/A"
+                if link_elem:
+                    href = link_elem.get('href', '')
+                    if '/itm/' in href:
+                        try:
+                            start = href.find('/itm/') + 5
+                            end = href.find('?', start)
+                            if end == -1:
+                                end = len(href)
+                            prdid = href[start:end]
+                        except:
+                            pass
+                
+                items.append({
+                    'title': title,
+                    'prdid': prdid,
+                    'price': price,
+                    'imagelink': imagelink or "No image"
+                })
+                
+                if len(items) >= max_results_per_keyword:
+                    break
+                    
+            except Exception as e:
+                print(f"Error parsing mobile item: {e}")
+                continue
+        
+        print(f"Successfully parsed {len(items)} mobile items")
+        return items
 
     def _parse_results(self, html, max_results_per_keyword):
         soup = BeautifulSoup(html, 'lxml')
@@ -181,12 +295,19 @@ class EbayScraper:
                     prdlink = None
                     prdid = None
                     
-                    # Try to find a link with aria-label (contains title)
+                    # Try to find the main product link - prioritize links with actual text content
                     for link in links:
+                        link_text = link.get_text(strip=True)
                         aria_label = link.get('aria-label', '')
-                        # Skip watch buttons and "opens in new window" labels
-                        if aria_label and not aria_label.startswith('watch') and 'window' not in aria_label.lower() and 'tab' not in aria_label.lower():
-                            # This is likely the main product link
+                        
+                        # Skip image-only links and watch buttons
+                        if link_text and len(link_text) > 10 and not link_text.lower().startswith('watch'):
+                            # Use the text content as title
+                            title = link_text
+                            prdlink = link.get('href', '')
+                            break
+                        elif aria_label and len(aria_label) > 10 and not aria_label.lower().startswith('opens in') and not aria_label.lower().startswith('watch'):
+                            # Fallback to aria-label if it has meaningful content
                             title = aria_label
                             prdlink = link.get('href', '')
                             break
@@ -226,15 +347,15 @@ class EbayScraper:
                             end_index = len(prdlink)
                         prdid = prdlink[start_index+5:end_index] if start_index != -1 else None
                     
-                    # Find price within the li - look for any text with $
+                    # Find price within the li - look for any text with £ or $
                     price = "N/A"
                     price_elem = item_li.find('span', class_=lambda x: x and 's-item__price' in str(x) if x else False)
                     if not price_elem:
-                        # Try finding any span with dollar sign
-                        price_spans = item_li.find_all('span', string=lambda x: x and '$' in str(x) if x else False)
+                        # Try finding any span with pound or dollar sign
+                        price_spans = item_li.find_all('span', string=lambda x: x and ('£' in str(x) or '$' in str(x)) if x else False)
                         for span in price_spans:
                             text = span.get_text(strip=True)
-                            if text.startswith('$') and 'shipping' not in text.lower():
+                            if (text.startswith('£') or text.startswith('$')) and 'shipping' not in text.lower():
                                 price_elem = span
                                 break
                     

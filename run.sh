@@ -404,15 +404,17 @@ load_gemini_api_key() {
     return 1
 }
 
-# Test eBay Scraper with single keyword
-test_ebay_scraper() {
-    log_info "Testing eBay Scraper with 'laptop' keyword..."
+
+
+# Test AliExpress Scraper with single keyword
+test_aliexpress_scraper() {
+    log_info "Testing AliExpress Scraper with 'laptop' keyword..."
     echo ""
     
-    local scraper_dir="$SCRIPT_DIR/ebay_scraper"
+    local scraper_dir="$SCRIPT_DIR/aliexpress_scraper"
     
     if [ ! -d "$scraper_dir" ]; then
-        log_error "eBay scraper directory not found"
+        log_error "AliExpress scraper directory not found"
         return 1
     fi
     
@@ -444,15 +446,15 @@ test_ebay_scraper() {
     python3 -c "
 import sys
 sys.path.insert(0, '.')
-from main import EbayScraper
+from main import AliExpressSeleniumScraper
 import os
 
 # Set test parameters
 os.environ['GEMINI_API_KEY'] = os.getenv('GEMINI_API_KEY', '')
 os.environ['GEMINI_API_ENDPOINT'] = os.getenv('GEMINI_API_ENDPOINT', 'https://generativelanguage.googleapis.com/v1beta/models/')
 
-print('Testing eBay scraper...')
-scraper = EbayScraper()
+print('Testing AliExpress scraper...')
+scraper = AliExpressSeleniumScraper()
 
 # Test search
 print('\\nSearching for: laptop')
@@ -469,24 +471,24 @@ if results:
 else:
     print('❌ No results found')
     print('\\nPossible issues:')
-    print('- eBay may have changed their HTML structure')
+    print('- AliExpress may have changed their HTML structure')
     print('- Network connectivity issues')
-    print('- Rate limiting from eBay')
+    print('- Rate limiting from AliExpress')
     
     # Try to debug
     import requests
     from bs4 import BeautifulSoup
     
     print('\\nDebug info:')
-    url = 'https://www.ebay.com/sch/i.html?_nkw=laptop'
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    url = 'https://www.aliexpress.com/wholesale?SearchText=laptop'
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'}
     try:
         response = requests.get(url, headers=headers, timeout=10)
         print(f'HTTP Status: {response.status_code}')
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'lxml')
             # Check for product links
-            links = soup.find_all('a', href=lambda x: x and '/itm/' in x if x else False)
+            links = soup.find_all('a', href=lambda x: x and '/item/' in x if x else False)
             print(f'Product links found in page: {len(links)}')
             
             # Check page title
@@ -567,6 +569,77 @@ run_ebay_scraper() {
     if [ -f "$scraper_dir/output.csv" ]; then
         local timestamp=$(date +%Y%m%d_%H%M%S)
         local output_file="$DATA_DIR/ebay_products_${timestamp}.csv"
+        mv "$scraper_dir/output.csv" "$output_file"
+        log_success "Output saved to: $output_file"
+        
+        # Show file info
+        local row_count=$(tail -n +2 "$output_file" | wc -l)
+        log_info "Scraped $row_count products"
+    fi
+    
+    deactivate
+}
+
+# AliExpress Scraper functions
+run_aliexpress_scraper() {
+    log_info "Starting AliExpress Scraper..."
+    echo ""
+    
+    local scraper_dir="$SCRIPT_DIR/aliexpress_scraper"
+    
+    if [ ! -d "$scraper_dir" ]; then
+        log_error "AliExpress scraper directory not found at $scraper_dir"
+        return 1
+    fi
+    
+    # Check if venv exists, if not set it up
+    if [ ! -d "$scraper_dir/venv" ] || [ ! -f "$scraper_dir/venv/bin/activate" ]; then
+        log_info "Virtual environment not found. Setting up..."
+        setup_venv "$scraper_dir"
+    fi
+    
+    # Check and load Gemini API key
+    if ! load_gemini_api_key; then
+        log_warning "Gemini API key not configured"
+        echo -e "${YELLOW}The AliExpress scraper requires a Gemini API key for generating descriptions.${NC}"
+        echo -e "${YELLOW}Would you like to set it up now? (Y/n): ${NC}\c"
+        read setup_api
+        if [[ ! "$setup_api" =~ ^[Nn]$ ]]; then
+            setup_gemini_api_key
+        else
+            log_warning "Proceeding without API key. You'll be prompted to enter it during scraping."
+        fi
+    else
+        log_success "Gemini API key loaded from .env file"
+    fi
+    
+    # Check for Keywords.csv
+    if [ ! -f "$scraper_dir/Keywords.csv" ]; then
+        log_warning "Keywords.csv not found. Creating from sample..."
+        if [ -f "$scraper_dir/Keywords_sample.csv" ]; then
+            cp "$scraper_dir/Keywords_sample.csv" "$scraper_dir/Keywords.csv"
+            log_info "Created Keywords.csv from sample. Please edit it with your keywords."
+            echo -e "${YELLOW}Edit Keywords.csv? (y/N): ${NC}\c"
+            read edit_keywords
+            if [[ "$edit_keywords" =~ ^[Yy]$ ]]; then
+                ${EDITOR:-nano} "$scraper_dir/Keywords.csv"
+            fi
+        else
+            log_error "Keywords_sample.csv not found. Please create Keywords.csv manually."
+            return 1
+        fi
+    fi
+    
+    # Run the scraper
+    cd "$scraper_dir"
+    source venv/bin/activate
+    log_info "Running AliExpress scraper..."
+    python3 main.py
+    
+    # Move output to data directory
+    if [ -f "$scraper_dir/output.csv" ]; then
+        local timestamp=$(date +%Y%m%d_%H%M%S)
+        local output_file="$DATA_DIR/aliexpress_products_${timestamp}.csv"
         mv "$scraper_dir/output.csv" "$output_file"
         log_success "Output saved to: $output_file"
         
@@ -668,6 +741,15 @@ setup_all() {
         log_warning "eBay scraper directory not found"
     fi
     
+    # Setup AliExpress scraper
+    if [ -d "$SCRIPT_DIR/aliexpress_scraper" ]; then
+        log_info "Setting up AliExpress Scraper..."
+        setup_venv "$SCRIPT_DIR/aliexpress_scraper"
+        log_success "AliExpress Scraper setup complete"
+    else
+        log_warning "AliExpress scraper directory not found"
+    fi
+    
     echo ""
     
     # Setup CSV deduplicator
@@ -711,6 +793,12 @@ cleanup() {
         if [ -d "$SCRIPT_DIR/ebay_scraper/venv" ]; then
             rm -rf "$SCRIPT_DIR/ebay_scraper/venv"
             log_success "Removed eBay scraper virtual environment"
+        fi
+        
+        # Remove AliExpress scraper venv
+        if [ -d "$SCRIPT_DIR/aliexpress_scraper/venv" ]; then
+            rm -rf "$SCRIPT_DIR/aliexpress_scraper/venv"
+            log_success "Removed AliExpress scraper virtual environment"
         fi
         
         # Remove CSV deduplicator venv
@@ -779,8 +867,10 @@ usage() {
     echo "  --setup          Setup all projects (install dependencies)"
     echo "  --api-key        Configure Gemini API key for AI descriptions"
     echo "  --test-api       Test Gemini API configuration"
-    echo "  --test-scraper   Quick test of eBay scraper with 'laptop' keyword"
-    echo "  --scrape         Run eBay scraper"
+
+    echo "  --test-aliexpress Quick test of AliExpress scraper with 'laptop' keyword"
+    echo "  --scrape-ebay    Run eBay scraper"
+    echo "  --scrape-aliexpress Run AliExpress scraper"
     echo "  --deduplicate    Run CSV/Excel deduplicator"
     echo "  --view-data      View data files"
     echo "  --cleanup        Clean temporary files and old logs"
@@ -793,26 +883,26 @@ usage() {
 show_menu() {
     echo ""
     echo "┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐"
-    echo "│                                    SCRAPER AND CSV PROCESSOR v1.0                                                │"
+    echo "│                                    SCRAPER AND CSV PROCESSOR                                                     │"
     echo "├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     echo "│  SETUP & CONFIGURATION                                                                                           │"
-    echo "│  1. Setup All Projects           [./run.sh --setup]          # Install Python dependencies for all tools         │"
-    echo "│  2. Configure Gemini API Key     [./run.sh --api-key]        # Set up API key for AI descriptions                │"
-    echo "│  3. Test API Configuration       [./run.sh --test-api]       # Test if Gemini API is working                     │"
-    echo "│  4. Check Python & Dependencies                              # Verify Python version and virtual environments    │"
+    echo "│  1. Setup All Projects           [./run.sh --setup]             # Install Python dependencies for all tools      │"
+    echo "│  2. Configure Gemini API Key     [./run.sh --api-key]           # Set up API key for AI descriptions             │"
+    echo "│  3. Test API Configuration       [./run.sh --test-api]          # Test if Gemini API is working                  │"
+    echo "│  4. Check Python & Dependencies                                 # Verify Python version and virtual environments │"
     echo "├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     echo "│  SCRAPING OPERATIONS                                                                                             │"
-    echo "│  5. Test eBay Scraper            [./run.sh --test-scraper]   # Quick test with 'laptop' keyword                  │"
-    echo "│  6. Run eBay Scraper             [./run.sh --scrape]         # Scrape products from eBay using keywords          │"
-    echo "│  7. Edit Keywords.csv                                        # Modify search keywords for eBay scraper           │"
+    echo "│  5. Run eBay Scraper             [./run.sh --scrape-ebay]       # Scrape products from eBay using keywords       │"
+    echo "│  6. Run AliExpress Scraper       [./run.sh --scrape-aliexpress] # Scrape products from AliExpress using keywords │"
+    echo "│  7. Edit Keywords.csv (eBay)                                    # Modify search keywords for eBay scraper        │"
     echo "├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     echo "│  DATA PROCESSING                                                                                                 │"
-    echo "│  8. Run CSV Deduplicator         [./run.sh --deduplicate]    # Remove duplicate rows from CSV/Excel files        │"
-    echo "│  9. View Data Files              [./run.sh --view-data]      # List all processed data files with details        │"
+    echo "│  8. Run CSV Deduplicator         [./run.sh --deduplicate]       # Remove duplicate rows from CSV/Excel files     │"
+    echo "│  9. View Data Files              [./run.sh --view-data]         # List all processed data files with details     │"
     echo "├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     echo "│  MAINTENANCE                                                                                                     │"
-    echo "│  10. Clean Temporary Files       [./run.sh --cleanup]        # Remove cache, old logs, and temporary files       │"
-    echo "│  11. View Logs                                               # Browse and read application log files             │"
+    echo "│  10. Clean Temporary Files       [./run.sh --cleanup]           # Remove cache, old logs, and temporary files    │"
+    echo "│  11. View Logs                                                  # Browse and read application log files          │"
     echo "├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     echo "│  0. Exit                                                                                                         │"
     echo "└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"
@@ -863,7 +953,7 @@ check_first_time_setup() {
     local first_run=false
     
     # Check if virtual environments exist
-    if [ ! -d "$SCRIPT_DIR/ebay_scraper/venv" ] && [ ! -d "$SCRIPT_DIR/excel_csv deduplicator/venv" ]; then
+    if [ ! -d "$SCRIPT_DIR/ebay_scraper/venv" ] && [ ! -d "$SCRIPT_DIR/aliexpress_scraper/venv" ] && [ ! -d "$SCRIPT_DIR/excel_csv deduplicator/venv" ]; then
         first_run=true
     fi
     
@@ -909,11 +999,22 @@ main() {
         --test-api)
             test_api_configuration
             ;;
-        --test-scraper)
+
+        --test-aliexpress)
             check_python
-            test_ebay_scraper
+            test_aliexpress_scraper
             ;;
+        --scrape-ebay)
+            check_python
+            run_ebay_scraper
+            ;;
+        --scrape-aliexpress)
+            check_python
+            run_aliexpress_scraper
+            ;;
+
         --scrape)
+            # Backward compatibility
             check_python
             run_ebay_scraper
             ;;
@@ -955,6 +1056,13 @@ main() {
                             log_warning "eBay Scraper virtual environment: ✗"
                         fi
                         
+                        # Check AliExpress scraper dependencies
+                        if [ -d "$SCRIPT_DIR/aliexpress_scraper/venv" ]; then
+                            log_success "AliExpress Scraper virtual environment: ✓"
+                        else
+                            log_warning "AliExpress Scraper virtual environment: ✗"
+                        fi
+                        
                         # Check deduplicator dependencies
                         if [ -d "$SCRIPT_DIR/excel_csv deduplicator/venv" ]; then
                             log_success "CSV Deduplicator virtual environment: ✓"
@@ -972,11 +1080,11 @@ main() {
                         ;;
                     5)
                         check_python
-                        test_ebay_scraper
+                        run_ebay_scraper
                         ;;
                     6)
                         check_python
-                        run_ebay_scraper
+                        run_aliexpress_scraper
                         ;;
                     7)
                         if [ -f "$SCRIPT_DIR/ebay_scraper/Keywords.csv" ]; then
