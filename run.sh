@@ -438,7 +438,7 @@ usage() {
 show_menu() {
     echo ""
     echo "┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐"
-    echo "│                                    SCRAPER AND CSV PROCESSOR                                            │"
+    echo "│                                    SCRAPER AND CSV PROCESSOR                                                     │"
     echo "├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     echo "│  SETUP & CONFIGURATION                                                                                           │"
     echo "│  1. Setup All Projects         [./run.sh --setup]            # Install Python dependencies for all tools         │"
