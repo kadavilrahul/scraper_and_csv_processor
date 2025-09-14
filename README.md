@@ -1,71 +1,263 @@
-# eBay Scraper
+# Scraper and CSV Processor Suite
 
-A Python script to scrape search results from eBay, generate descriptions and output them in a structured CSV format.
+A comprehensive toolkit for web scraping and data processing, featuring an eBay product scraper and CSV/Excel file deduplicator.
 
-## Features
-- Search eBay products using keywords from Keywords.csv
-- Extract product details including images, titles, and prices
-- Categorize products based on search keywords
-- Configurable results per keyword and total results limit
-- Clean and structured CSV output
-- Generates short and full descriptions using Gemini AI for each category
 
-## Development Environment
-- Developed and tested on Ubuntu 24.04.1 LTS (Noble Numbat)
-- Generated using Windsurf Code Editor
+## 🛠️ Installation
 
-## Installation (
-Run below commands on Linux terminal
+### Quick Setup
 
-1. Clone this repository, activate python environment and install dependencies
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/scraper_and_csv_processor.git
+```
+```bash
+cd scraper_and_csv_processor
+```
+
+
+2. Run the setup:
+```bash
+bash run.sh
+```
+
+## 🚀 Features
+
+### eBay Scraper
+- Search eBay products using custom keywords
+- Extract product details (images, titles, prices)
+- Auto-categorize products based on search terms
+- Generate AI-powered descriptions using Gemini
+- Configurable result limits per keyword
+- Clean CSV output format
+
+### CSV/Excel Deduplicator
+- Remove duplicate entries from files
+- Process both CSV and Excel formats (.csv, .xlsx, .xls)
+- Find duplicates within single files and across multiple files
+- Automatic backup creation before processing
+- Column-based deduplication (uses column B by default)
+- Detailed statistics and reporting
+
+## 📋 Prerequisites
+
+- **Operating System**: Linux (Ubuntu 24.04.1 LTS recommended)
+- **Python**: Version 3.8 or higher
+- **Git**: For cloning the repository
+- **Internet**: Required for eBay scraping
+
+This will automatically:
+- Check Python installation
+- Create virtual environments for each tool
+- Install all required dependencies
+
+### Manual Setup
+
+If you prefer to set up each tool individually:
+
+#### eBay Scraper:
+```bash
+cd ebay_scraper
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+#### CSV Deduplicator:
+```bash
+cd "excel_csv deduplicator"
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+
+### Command Line Mode
+
+Run specific operations directly:
 
 ```bash
-git clone https://github.com/kadavilrahul/ebay_scraper.git && cd ebay_scraper && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt
-```
-2. Create or move a `Keywords.csv` file in the current directory with your search terms (see `Keywords_sample.csv` for format)
-Input Format
+# Setup all projects
+./run.sh --setup
 
-The script requires a `Keywords.csv` file with the following format:
+# Run eBay scraper
+./run.sh --scrape
+
+# Run CSV deduplicator
+./run.sh --deduplicate
+
+# View data files
+./run.sh --view-data
+
+# Clean temporary files
+./run.sh --cleanup
+
+# Show help
+./run.sh --help
+```
+
+## 📂 Project Structure
+
+```
+scraper_and_csv_processor/
+├── run.sh                      # Main script with menu interface
+├── README.md                   # This file
+├── .gitignore                  # Git ignore rules
+│
+├── ebay_scraper/              # eBay scraping tool
+│   ├── main.py                # Scraper implementation
+│   ├── requirements.txt       # Python dependencies
+│   ├── Keywords_sample.csv    # Sample keywords file
+│   ├── Keywords.csv           # Your keywords (create from sample)
+│   └── README.md              # Tool documentation
+│
+├── excel_csv deduplicator/    # Deduplication tool
+│   ├── main.py                # Deduplicator implementation
+│   ├── requirements.txt       # Python dependencies
+│   ├── data_csv/              # Input directory for files
+│   │   └── .gitkeep          # Keeps directory in git
+│   └── README.md              # Tool documentation
+│
+├── data/                      # Shared data output directory
+└── logs/                      # Application logs
+
+```
+
+## 🔧 Configuration
+
+### eBay Scraper Keywords
+
+1. Copy the sample file:
+```bash
+cp ebay_scraper/Keywords_sample.csv ebay_scraper/Keywords.csv
+```
+
+2. Edit with your keywords:
 ```csv
 Keywords
-"term1"
-"term2"
-"term3"
+"gaming laptop"
+"wireless mouse"
+"mechanical keyboard"
 ```
-A sample file `Keywords_sample.csv` is provided as a template.
 
-3. Run the script:
+3. Run the scraper - you'll be prompted for:
+   - Max results per keyword (default: 10)
+   - Max total results (default: 20)
+   - Price multiplier (default: 200)
+
+### CSV Deduplicator Setup
+
+1. Place your CSV/Excel files in:
+```
+excel_csv deduplicator/data_csv/
+```
+
+2. Run the deduplicator
+3. The tool will:
+   - Identify the newest file
+   - Use column B for deduplication
+   - Create backups before processing
+   - Show statistics after completion
+
+## 📊 Output Files
+
+### eBay Scraper Output
+
+Creates CSV files in `data/` directory with format:
+- Filename: `ebay_products_YYYYMMDD_HHMMSS.csv`
+- Columns:
+  - Image (product image URL)
+  - Title (product title)
+  - Regular Price (product price)
+  - Category (search keyword)
+  - Short_description (AI-generated)
+  - description (AI-generated full description)
+
+### Deduplicator Output
+
+- Processes files in-place
+- Creates backups with format: `original_backup_YYYYMMDD_HHMMSS.ext`
+- Backup location: Same directory as original file
+
+## 🧹 Maintenance
+
+### Cleanup Old Files
+
+Remove temporary files and old logs:
 ```bash
-python3 main.py
+./run.sh --cleanup
 ```
 
-Follow the prompts to:
-1. Enter the maximum number of results per keyword (default is 10)
-2. Enter the maximum total number of results across all keywords (default is 20)
-3. Enter price multipler (default is 200)
+This will:
+- Delete Python cache files (`__pycache__`, `*.pyc`)
+- Remove logs older than 30 days
+- Show current disk usage
 
-The script will:
-1. Read keywords from Keywords.csv
-2. Search eBay for each keyword
-3. Save results in a CSV file with the following columns:
-   - Image (product image URL)
-   - Title (product title)
-   - Regular Price (product price)
-   - Category (search keyword used)
-   - Short_description (generated for each category using gemini LLM)
-   - description (generated for each category using gemini LLM)
+### View Logs
 
-## Output Format
+Check application logs through the menu (option 8) or directly in:
+```
+logs/
+```
 
-The output CSV file contains the following columns:
-- **Image**: URL to the product image
-- **Title**: Product title from the listing
-- **Regular Price**: Price of the product
-- **Category**: The keyword used to find this product
-- **Short_description**: Generated for the category
-- **description**: Generated for the category
+## 🐛 Troubleshooting
 
-## Note
-- The script processes Keywords.csv file for search terms
-- Results are limited by both per-keyword and total result limits
-- The script will stop when either limit is reached
+### Common Issues
+
+1. **Python not found**
+   - Install Python 3: `sudo apt install python3 python3-venv python3-pip`
+
+2. **Permission denied**
+   - Make script executable: `chmod +x run.sh`
+
+3. **Module not found**
+   - Run setup again: `./run.sh --setup`
+
+4. **No Keywords.csv file**
+   - Copy from sample: `cp ebay_scraper/Keywords_sample.csv ebay_scraper/Keywords.csv`
+
+5. **Empty deduplicator directory**
+   - The menu will offer to copy files from the data directory
+
+### Log Files
+
+Check logs for detailed error information:
+```bash
+ls -la logs/
+```
+
+## 🤝 Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## 📝 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 👥 Authors
+
+- Developed using Windsurf Code Editor
+- Tested on Ubuntu 24.04.1 LTS
+
+## 🙏 Acknowledgments
+
+- eBay for providing product data
+- Google Gemini for AI-powered descriptions
+- Python community for excellent libraries
+
+## 📞 Support
+
+For issues, questions, or suggestions:
+- Open an issue on GitHub
+- Check existing issues for solutions
+- Read tool-specific README files in each directory
+
+---
+
+**Note**: This tool is for educational purposes. Please respect website terms of service and rate limits when scraping.

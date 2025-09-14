@@ -1,51 +1,28 @@
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual Environment
 venv/
-ENV/
+*/venv/
 
 # IDE
-.idea/
 .vscode/
-*.swp
-*.swo
 
 # Project specific
 output.csv
 Keywords.csv
 .env
 
-# Ignore backups folder
-backups/
+# Data directories
+data/
+logs/
+*/data_csv/*
+!*/data_csv/.gitkeep
 
-# Ignore shell scripts, log files, and pid files
+# Log files
 *.log
-*.pid
 
-# Ignore specific shell script files
-setup_file_versioning.sh
-file_versioning.sh
-check_versioning.sh
-
-.env
+# CSV and Excel files (except samples)
+*.csv
+!Keywords_sample.csv
+*.xlsx
+*.xls
