@@ -9,6 +9,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR="$SCRIPT_DIR/logs"
 DATA_DIR="$SCRIPT_DIR/data"
+ENV_FILE="$SCRIPT_DIR/.env"
 
 # Colors
 RED='\033[0;31m'
@@ -170,6 +171,342 @@ setup_venv() {
     deactivate
 }
 
+# Gemini API Key Management
+setup_gemini_api_key() {
+    log_info "Setting up Gemini API configuration..."
+    echo ""
+    
+    # Check if .env file exists and has API key
+    if [ -f "$ENV_FILE" ]; then
+        if grep -q "GEMINI_API_KEY=" "$ENV_FILE"; then
+            local current_key=$(grep "GEMINI_API_KEY=" "$ENV_FILE" | cut -d'=' -f2 | tr -d '"' | tr -d "'")
+            if [ -n "$current_key" ]; then
+                log_success "Gemini API key already configured"
+                echo -e "${YELLOW}Current key: ${NC}${current_key:0:10}...${current_key: -4}"
+                echo -e "${YELLOW}Update API configuration? (y/N): ${NC}\c"
+                read update_key
+                if [[ ! "$update_key" =~ ^[Yy]$ ]]; then
+                    return 0
+                fi
+            fi
+        fi
+    fi
+    
+    # Prompt for new API key
+    echo -e "${YELLOW}Enter your Gemini API key: ${NC}\c"
+    read -s api_key
+    echo ""
+    
+    if [ -z "$api_key" ]; then
+        log_warning "No API key provided"
+        return 1
+    fi
+    
+    # Ask for custom endpoint or use default
+    local endpoint="https://generativelanguage.googleapis.com/v1beta/models/"
+    echo -e "${YELLOW}Use default endpoint? (Y/n): ${NC}\c"
+    read use_default
+    
+    if [[ "$use_default" =~ ^[Nn]$ ]]; then
+        echo -e "${YELLOW}Enter custom Gemini API endpoint: ${NC}\c"
+        read custom_endpoint
+        if [ -n "$custom_endpoint" ]; then
+            endpoint="$custom_endpoint"
+        fi
+    fi
+    
+    log_info "Endpoint: $endpoint"
+    
+    # Test the API key
+    log_info "Testing API key..."
+    if test_gemini_api_key "$api_key" "$endpoint"; then
+        # Save to .env file
+        if [ -f "$ENV_FILE" ]; then
+            # Remove old config if exists
+            grep -v -E "GEMINI_API_KEY=|GEMINI_API_ENDPOINT=" "$ENV_FILE" > "$ENV_FILE.tmp" || true
+            mv "$ENV_FILE.tmp" "$ENV_FILE"
+        fi
+        echo "GEMINI_API_KEY=$api_key" >> "$ENV_FILE"
+        echo "GEMINI_API_ENDPOINT=$endpoint" >> "$ENV_FILE"
+        log_success "API configuration saved to .env file"
+        
+        # Set permission for security
+        chmod 600 "$ENV_FILE"
+        
+        # Export for current session
+        export GEMINI_API_KEY="$api_key"
+        export GEMINI_API_ENDPOINT="$endpoint"
+        log_success "API configuration complete!"
+    else
+        log_error "API key validation failed"
+        return 1
+    fi
+}
+
+# Test Gemini API key
+test_gemini_api_key() {
+    local api_key="$1"
+    local endpoint="${2:-https://generativelanguage.googleapis.com/v1beta/models/}"
+    
+    # Ensure endpoint ends with /
+    [[ "$endpoint" != */ ]] && endpoint="$endpoint/"
+    
+    # Test with a simple request
+    local test_url="${endpoint}gemini-2.0-flash-exp:generateContent"
+    local response=$(curl -s -o /dev/null -w "%{http_code}" \
+        -X POST "$test_url" \
+        -H "Content-Type: application/json" \
+        -H "x-goog-api-key: $api_key" \
+        -d '{
+            "contents": [{
+                "parts": [{
+                    "text": "Reply with OK"
+                }]
+            }]
+        }' \
+        --max-time 10)
+    
+    if [ "$response" = "200" ]; then
+        log_success "API key is valid"
+        return 0
+    elif [ "$response" = "403" ]; then
+        log_error "API key is invalid or lacks permissions"
+        return 1
+    elif [ "$response" = "429" ]; then
+        log_warning "API key is valid but rate limited"
+        return 0
+    else
+        log_error "Unexpected response code: $response"
+        return 1
+    fi
+}
+
+# Test current API configuration with detailed output
+test_api_configuration() {
+    log_info "Testing Gemini API Configuration..."
+    echo ""
+    
+    # Check if configuration exists
+    if ! load_gemini_api_key; then
+        log_error "No API configuration found"
+        echo -e "${YELLOW}Run option 2 to configure Gemini API${NC}"
+        return 1
+    fi
+    
+    # Display current configuration
+    echo "Current Configuration:"
+    echo "────────────────────────────────────────────"
+    echo "API Key: ${GEMINI_API_KEY:0:15}...${GEMINI_API_KEY: -4}"
+    echo "Endpoint: ${GEMINI_API_ENDPOINT}"
+    echo "────────────────────────────────────────────"
+    echo ""
+    
+    # Test the configuration
+    log_info "Sending test request to Gemini API..."
+    
+    local test_url="${GEMINI_API_ENDPOINT}gemini-2.0-flash-exp:generateContent"
+    local response_file="/tmp/gemini_test_$$.json"
+    
+    # Make test request and capture full response
+    local http_code=$(curl -s -w "%{http_code}" \
+        -X POST "$test_url" \
+        -H "Content-Type: application/json" \
+        -H "x-goog-api-key: $GEMINI_API_KEY" \
+        -d '{
+            "contents": [{
+                "parts": [{
+                    "text": "Say hello and confirm you are working"
+                }]
+            }]
+        }' \
+        -o "$response_file" \
+        --max-time 10)
+    
+    echo ""
+    echo "Response Status: $http_code"
+    
+    if [ "$http_code" = "200" ]; then
+        log_success "✅ API test successful!"
+        
+        # Try to extract and show the response
+        if [ -f "$response_file" ]; then
+            if command -v python3 &> /dev/null; then
+                echo ""
+                echo "API Response:"
+                python3 -c "
+import json
+try:
+    with open('$response_file', 'r') as f:
+        data = json.load(f)
+        if 'candidates' in data and data['candidates']:
+            text = data['candidates'][0].get('content', {}).get('parts', [{}])[0].get('text', 'No text')
+            print('  ' + text[:200])
+except:
+    print('  (Could not parse response)')
+"
+            else
+                echo "Response received (install python3 to see details)"
+            fi
+        fi
+        echo ""
+        log_success "Your Gemini API is working correctly!"
+        
+    elif [ "$http_code" = "403" ]; then
+        log_error "❌ API key is invalid or doesn't have proper permissions"
+        echo ""
+        echo "Please check:"
+        echo "  1. Your API key is correct"
+        echo "  2. The API key has Gemini API enabled in Google Cloud Console"
+        echo "  3. The project has billing enabled"
+        
+    elif [ "$http_code" = "429" ]; then
+        log_warning "⚠️ Rate limit exceeded"
+        echo ""
+        echo "The API key is valid but you've exceeded the rate limit."
+        echo "Wait a moment and try again."
+        
+    elif [ "$http_code" = "404" ]; then
+        log_error "❌ Endpoint or model not found"
+        echo ""
+        echo "The endpoint URL might be incorrect or the model might not exist."
+        echo "Current endpoint: $GEMINI_API_ENDPOINT"
+        
+    else
+        log_error "❌ Unexpected error (HTTP $http_code)"
+        if [ -f "$response_file" ] && [ -s "$response_file" ]; then
+            echo ""
+            echo "Error details:"
+            head -3 "$response_file" | sed 's/^/  /'
+        fi
+    fi
+    
+    # Cleanup
+    rm -f "$response_file"
+    
+    echo ""
+    return 0
+}
+
+# Load API key from .env file
+load_gemini_api_key() {
+    if [ -f "$ENV_FILE" ]; then
+        if grep -q "GEMINI_API_KEY=" "$ENV_FILE"; then
+            export GEMINI_API_KEY=$(grep "GEMINI_API_KEY=" "$ENV_FILE" | cut -d'=' -f2 | tr -d '"' | tr -d "'")
+            # Also load endpoint if present
+            if grep -q "GEMINI_API_ENDPOINT=" "$ENV_FILE"; then
+                export GEMINI_API_ENDPOINT=$(grep "GEMINI_API_ENDPOINT=" "$ENV_FILE" | cut -d'=' -f2 | tr -d '"' | tr -d "'")
+            else
+                export GEMINI_API_ENDPOINT="https://generativelanguage.googleapis.com/v1beta/models/"
+            fi
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Test eBay Scraper with single keyword
+test_ebay_scraper() {
+    log_info "Testing eBay Scraper with 'laptop' keyword..."
+    echo ""
+    
+    local scraper_dir="$SCRIPT_DIR/ebay_scraper"
+    
+    if [ ! -d "$scraper_dir" ]; then
+        log_error "eBay scraper directory not found"
+        return 1
+    fi
+    
+    # Check virtual environment
+    if [ ! -d "$scraper_dir/venv" ] || [ ! -f "$scraper_dir/venv/bin/activate" ]; then
+        log_warning "Virtual environment not found. Setting up..."
+        setup_venv "$scraper_dir"
+    fi
+    
+    # Load API key
+    if load_gemini_api_key; then
+        log_success "API key loaded"
+    else
+        log_warning "No API key configured - descriptions will not be generated"
+    fi
+    
+    # Create test keywords file
+    echo "Keywords" > "$scraper_dir/test_keywords.csv"
+    echo "laptop" >> "$scraper_dir/test_keywords.csv"
+    
+    cd "$scraper_dir"
+    source venv/bin/activate
+    
+    log_info "Running test scrape..."
+    echo "Testing with parameters: max_results=3, total_limit=3"
+    echo ""
+    
+    # Run Python test directly
+    python3 -c "
+import sys
+sys.path.insert(0, '.')
+from main import EbayScraper
+import os
+
+# Set test parameters
+os.environ['GEMINI_API_KEY'] = os.getenv('GEMINI_API_KEY', '')
+os.environ['GEMINI_API_ENDPOINT'] = os.getenv('GEMINI_API_ENDPOINT', 'https://generativelanguage.googleapis.com/v1beta/models/')
+
+print('Testing eBay scraper...')
+scraper = EbayScraper()
+
+# Test search
+print('\\nSearching for: laptop')
+results = scraper.search('laptop', 3)
+
+if results:
+    print(f'✅ Found {len(results)} results!')
+    for i, item in enumerate(results[:3], 1):
+        print(f'\\n--- Item {i} ---')
+        print(f\"Title: {item.get('title', 'N/A')[:80]}...\")
+        print(f\"Price: {item.get('price', 'N/A')}\")
+        print(f\"Image: {'Yes' if item.get('imagelink') and item.get('imagelink') != 'No image' else 'No'}\")
+        print(f\"ID: {item.get('prdid', 'N/A')[:20]}...\")
+else:
+    print('❌ No results found')
+    print('\\nPossible issues:')
+    print('- eBay may have changed their HTML structure')
+    print('- Network connectivity issues')
+    print('- Rate limiting from eBay')
+    
+    # Try to debug
+    import requests
+    from bs4 import BeautifulSoup
+    
+    print('\\nDebug info:')
+    url = 'https://www.ebay.com/sch/i.html?_nkw=laptop'
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        print(f'HTTP Status: {response.status_code}')
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'lxml')
+            # Check for product links
+            links = soup.find_all('a', href=lambda x: x and '/itm/' in x if x else False)
+            print(f'Product links found in page: {len(links)}')
+            
+            # Check page title
+            title = soup.find('title')
+            if title:
+                print(f'Page title: {title.text[:50]}')
+    except Exception as e:
+        print(f'Debug failed: {e}')
+"
+    
+    deactivate
+    
+    # Cleanup test file
+    rm -f "$scraper_dir/test_keywords.csv"
+    
+    echo ""
+    log_info "Test complete!"
+    return 0
+}
+
 # eBay Scraper functions
 run_ebay_scraper() {
     log_info "Starting eBay Scraper..."
@@ -186,6 +523,21 @@ run_ebay_scraper() {
     if [ ! -d "$scraper_dir/venv" ] || [ ! -f "$scraper_dir/venv/bin/activate" ]; then
         log_info "Virtual environment not found. Setting up..."
         setup_venv "$scraper_dir"
+    fi
+    
+    # Check and load Gemini API key
+    if ! load_gemini_api_key; then
+        log_warning "Gemini API key not configured"
+        echo -e "${YELLOW}The eBay scraper requires a Gemini API key for generating descriptions.${NC}"
+        echo -e "${YELLOW}Would you like to set it up now? (Y/n): ${NC}\c"
+        read setup_api
+        if [[ ! "$setup_api" =~ ^[Nn]$ ]]; then
+            setup_gemini_api_key
+        else
+            log_warning "Proceeding without API key. You'll be prompted to enter it during scraping."
+        fi
+    else
+        log_success "Gemini API key loaded from .env file"
     fi
     
     # Check for Keywords.csv
@@ -425,6 +777,9 @@ usage() {
     echo ""
     echo "Options:"
     echo "  --setup          Setup all projects (install dependencies)"
+    echo "  --api-key        Configure Gemini API key for AI descriptions"
+    echo "  --test-api       Test Gemini API configuration"
+    echo "  --test-scraper   Quick test of eBay scraper with 'laptop' keyword"
     echo "  --scrape         Run eBay scraper"
     echo "  --deduplicate    Run CSV/Excel deduplicator"
     echo "  --view-data      View data files"
@@ -438,28 +793,31 @@ usage() {
 show_menu() {
     echo ""
     echo "┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐"
-    echo "│                                    SCRAPER AND CSV PROCESSOR                                                     │"
+    echo "│                                    SCRAPER AND CSV PROCESSOR v1.0                                                │"
     echo "├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     echo "│  SETUP & CONFIGURATION                                                                                           │"
-    echo "│  1. Setup All Projects         [./run.sh --setup]            # Install Python dependencies for all tools         │"
-    echo "│  2. Check Python & Dependencies                              # Verify Python version and virtual environments    │"
+    echo "│  1. Setup All Projects           [./run.sh --setup]          # Install Python dependencies for all tools         │"
+    echo "│  2. Configure Gemini API Key     [./run.sh --api-key]        # Set up API key for AI descriptions                │"
+    echo "│  3. Test API Configuration       [./run.sh --test-api]       # Test if Gemini API is working                     │"
+    echo "│  4. Check Python & Dependencies                              # Verify Python version and virtual environments    │"
     echo "├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     echo "│  SCRAPING OPERATIONS                                                                                             │"
-    echo "│  3. Run eBay Scraper          [./run.sh --scrape]            # Scrape products from eBay using keywords          │"
-    echo "│  4. Edit Keywords.csv                                        # Modify search keywords for eBay scraper           │"
+    echo "│  5. Test eBay Scraper            [./run.sh --test-scraper]   # Quick test with 'laptop' keyword                  │"
+    echo "│  6. Run eBay Scraper             [./run.sh --scrape]         # Scrape products from eBay using keywords          │"
+    echo "│  7. Edit Keywords.csv                                        # Modify search keywords for eBay scraper           │"
     echo "├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     echo "│  DATA PROCESSING                                                                                                 │"
-    echo "│  5. Run CSV Deduplicator      [./run.sh --deduplicate]       # Remove duplicate rows from CSV/Excel files        │"
-    echo "│  6. View Data Files           [./run.sh --view-data]         # List all processed data files with details        │"
+    echo "│  8. Run CSV Deduplicator         [./run.sh --deduplicate]    # Remove duplicate rows from CSV/Excel files        │"
+    echo "│  9. View Data Files              [./run.sh --view-data]      # List all processed data files with details        │"
     echo "├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     echo "│  MAINTENANCE                                                                                                     │"
-    echo "│  7. Clean Temporary Files     [./run.sh --cleanup]           # Remove cache, old logs, and temporary files       │"
-    echo "│  8. View Logs                                                # Browse and read application log files             │"
+    echo "│  10. Clean Temporary Files       [./run.sh --cleanup]        # Remove cache, old logs, and temporary files       │"
+    echo "│  11. View Logs                                               # Browse and read application log files             │"
     echo "├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     echo "│  0. Exit                                                                                                         │"
     echo "└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"
     echo ""
-    echo -e "${YELLOW}Select option [0-8]: ${NC}\c"
+    echo -e "${YELLOW}Select option [0-11]: ${NC}\c"
     read choice
     echo ""
 }
@@ -545,6 +903,16 @@ main() {
         --setup)
             setup_all
             ;;
+        --api-key)
+            setup_gemini_api_key
+            ;;
+        --test-api)
+            test_api_configuration
+            ;;
+        --test-scraper)
+            check_python
+            test_ebay_scraper
+            ;;
         --scrape)
             check_python
             run_ebay_scraper
@@ -572,6 +940,12 @@ main() {
                         setup_all
                         ;;
                     2)
+                        setup_gemini_api_key
+                        ;;
+                    3)
+                        test_api_configuration
+                        ;;
+                    4)
                         check_python
                         echo ""
                         # Check eBay scraper dependencies
@@ -587,12 +961,24 @@ main() {
                         else
                             log_warning "CSV Deduplicator virtual environment: ✗"
                         fi
+                        
+                        # Check API key
+                        if load_gemini_api_key; then
+                            log_success "Gemini API key: ✓"
+                            echo "  Endpoint: ${GEMINI_API_ENDPOINT}"
+                        else
+                            log_warning "Gemini API key: ✗"
+                        fi
                         ;;
-                    3)
+                    5)
+                        check_python
+                        test_ebay_scraper
+                        ;;
+                    6)
                         check_python
                         run_ebay_scraper
                         ;;
-                    4)
+                    7)
                         if [ -f "$SCRIPT_DIR/ebay_scraper/Keywords.csv" ]; then
                             ${EDITOR:-nano} "$SCRIPT_DIR/ebay_scraper/Keywords.csv"
                         else
@@ -601,17 +987,17 @@ main() {
                             ${EDITOR:-nano} "$SCRIPT_DIR/ebay_scraper/Keywords.csv"
                         fi
                         ;;
-                    5)
+                    8)
                         check_python
                         run_csv_deduplicator
                         ;;
-                    6)
+                    9)
                         view_data_files
                         ;;
-                    7)
+                    10)
                         cleanup
                         ;;
-                    8)
+                    11)
                         view_logs
                         ;;
                     0)

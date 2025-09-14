@@ -1,11 +1,11 @@
-import os
 import requests
 from bs4 import BeautifulSoup
-import json
 from urllib.parse import quote_plus
-import pandas as pd
 import csv
+import time
+import json
 import sys
+import os
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -13,7 +13,13 @@ load_dotenv()
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 if not GEMINI_API_KEY:
     GEMINI_API_KEY = input('Please enter your GEMINI_API_KEY: ')
-GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent"
+
+# Get endpoint from environment or use default
+GEMINI_ENDPOINT = os.getenv('GEMINI_API_ENDPOINT', 'https://generativelanguage.googleapis.com/v1beta/models/')
+# Ensure endpoint ends with /
+if not GEMINI_ENDPOINT.endswith('/'):
+    GEMINI_ENDPOINT += '/'
+GEMINI_BASE_URL = f"{GEMINI_ENDPOINT}gemini-2.0-flash-exp:generateContent"
 
 def check_keywords_file():
     """Check if Keywords.csv exists in the current directory"""
@@ -31,47 +37,60 @@ def generate_category_descriptions(category):
         'Content-Type': 'application/json',
         'x-goog-api-key': GEMINI_API_KEY
     }
-    
-    # Prompt for short description
-    short_prompt = f"Give SEO based short description (Who needs it, features, durability, and options, highlight any additional features) in maximum five sentences. The answer should start with the short description, no comments, no suggestions, nothing except the content. Use bullet point as much as possible but not other formats. The item is - : '{category}'"
-    
-    # Prompt for full description
-    full_prompt = f"""Give SEO based detailed description (With focus on benefits, mentioning what is it used for, all features, list key selling points like easy installation, durability, and color options etc, Include keywords: Includes relevant terms for search engine optimization, detailed specifications in bullet points, highlight any additional features. The answer should start with the description without any introduction no comments, no suggestions, nothing except the content. Use headings, bullet points and tables as much as possile. The item is - : '{category}'
-    Keep it professional and informative."""
-    
-    try:
-        # Generate short description
-        short_response = requests.post(
-            GEMINI_BASE_URL,
-            headers=headers,
-            json={
-                "contents": [{"parts":[{"text": short_prompt}]}]
-            }
-        )
-        short_response.raise_for_status()
-        short_description = short_response.json()['candidates'][0]['content']['parts'][0]['text'].strip()
-        
-        # Generate full description
-        full_response = requests.post(
-            GEMINI_BASE_URL,
-            headers=headers,
-            json={
-                "contents": [{"parts":[{"text": full_prompt}]}]
-            }
-        )
-        full_response.raise_for_status()
-        full_description = full_response.json()['candidates'][0]['content']['parts'][0]['text'].strip()
-        
-        return short_description, full_description
-    except Exception as e:
-        print(f"Error generating descriptions for category {category}: {e}")
-        return "", ""
 
-def process_price(price_str, price_multiplier):
+    prompt = f"""You're a woocommerce store owner writing concise yet informative descriptions for a product category.
+
+Please write for the product category '{category}':
+1. A short description (maximum 20 words)
+2. A full description (maximum 50 words)
+
+Format your response as:
+SHORT: [your short description]
+FULL: [your full description]
+
+Make the descriptions engaging and suitable for an e-commerce website."""
+
+    data = {
+        "contents": [{
+            "parts": [{
+                "text": prompt
+            }]
+        }]
+    }
+
+    try:
+        response = requests.post(GEMINI_BASE_URL, headers=headers, json=data)
+        if response.status_code == 200:
+            result = response.json()
+            if 'candidates' in result and result['candidates']:
+                content = result['candidates'][0].get('content', {})
+                if 'parts' in content and content['parts']:
+                    text = content['parts'][0].get('text', '')
+                    
+                    # Parse the response
+                    lines = text.strip().split('\n')
+                    short_desc = ""
+                    full_desc = ""
+                    
+                    for line in lines:
+                        if line.startswith('SHORT:'):
+                            short_desc = line.replace('SHORT:', '').strip()
+                        elif line.startswith('FULL:'):
+                            full_desc = line.replace('FULL:', '').strip()
+                    
+                    return short_desc, full_desc
+        else:
+            print(f"Gemini API error: {response.status_code}")
+    except Exception as e:
+        print(f"Error generating descriptions: {e}")
+    
+    return f"Quality {category} products", f"Discover our selection of {category} products with competitive prices and excellent quality"
+
+def clean_price(price_str, price_multiplier):
     """
-    Process price string to:
-    1. Handle variable prices (take the higher value)
-    2. Remove $ sign
+    Clean the price string and multiply by the given price multiplier
+    1. Remove $ and commas
+    2. Convert to float  
     3. Multiply by the price multiplier
     """
     try:
@@ -100,138 +119,298 @@ class EbayScraper:
     def __init__(self):
         self.base_url = "https://www.ebay.com/sch/i.html?_nkw={}"
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Cache-Control': 'max-age=0'
         }
 
     def search(self, query, max_results_per_keyword):
         url = self.base_url.format(quote_plus(query))
-        try:
-            response = requests.get(url)
-            response.raise_for_status()
-            return self._parse_results(response.text, max_results_per_keyword)
-        except requests.RequestException as e:
-            print(f"Error fetching results: {e}")
-            return []
+        
+        # Try multiple times with different approaches
+        for attempt in range(3):
+            try:
+                if attempt > 0:
+                    time.sleep(2 * attempt)  # Exponential backoff
+                    
+                response = requests.get(url, headers=self.headers, timeout=10)
+                
+                if response.status_code == 503:
+                    print(f"Attempt {attempt + 1}: Got 503 error, retrying...")
+                    continue
+                    
+                response.raise_for_status()
+                return self._parse_results(response.text, max_results_per_keyword)
+                
+            except requests.RequestException as e:
+                print(f"Attempt {attempt + 1}: Error fetching results: {e}")
+                if attempt == 2:  # Last attempt
+                    return []
+        
+        return []
 
     def _parse_results(self, html, max_results_per_keyword):
-        if "s-item__image-img" in html: print("YES")
-
         soup = BeautifulSoup(html, 'lxml')
         items = []
         
-        # Find all product listings
-        listings = soup.find_all('div', {'class': 's-item__wrapper'})
-        
-        for listing in listings[:max_results_per_keyword]:
-            try:
-                # Extract title
-                title = listing.find('div', {'class': 's-item__title'}).text.strip()
-                
-                # Extract price
-                price_elem = listing.find('span', {'class': 's-item__price'})
-                price = price_elem.text.strip() if price_elem else "N/A"
-                price = price.replace("$ ", "$")
-
-                # Get the product image URL
-                image_elem = listing.find("img")
-                imagelink = image_elem.get('data-defer-load')
-
-                # Get the product ID
-                prdlink_elem = listing.find("a")
-                prdlink = prdlink_elem.get('href')
-                start_index = prdlink.find("/itm/")
-                end_index = prdlink.find("?")
-                prdid = str(prdlink[start_index+5:end_index])
-
-                if "Shop on eBay" not in title:
+        # Method 1: Try the current eBay structure (ul.srp-results > li)
+        results_list = soup.find('ul', class_='srp-results')
+        if results_list:
+            # Get all li items (can be s-card or other classes)
+            list_items = results_list.find_all('li', recursive=False)[:max_results_per_keyword * 2]
+            print(f"Found {len(list_items)} items in results list")
+            
+            for item_li in list_items:
+                try:
+                    # Skip if it's an ad or sponsored item
+                    if 'srp-river-answer' in str(item_li.get('class', [])):
+                        continue
+                    
+                    # Find the main product link (usually has aria-label with title)
+                    links = item_li.find_all('a', href=lambda x: x and '/itm/' in x if x else False)
+                    
+                    title = None
+                    prdlink = None
+                    prdid = None
+                    
+                    # Try to find a link with aria-label (contains title)
+                    for link in links:
+                        aria_label = link.get('aria-label', '')
+                        # Skip watch buttons and "opens in new window" labels
+                        if aria_label and not aria_label.startswith('watch') and 'window' not in aria_label.lower() and 'tab' not in aria_label.lower():
+                            # This is likely the main product link
+                            title = aria_label
+                            prdlink = link.get('href', '')
+                            break
+                    
+                    # If no aria-label, try other methods
+                    if not title and links:
+                        link = links[0]  # Use first link
+                        prdlink = link.get('href', '')
+                        
+                        # Try to find title in h3 or span
+                        title_elem = item_li.find('h3', class_=lambda x: x and 's-item__title' in str(x) if x else False)
+                        if not title_elem:
+                            title_elem = item_li.find('span', {'role': 'heading'})
+                        if not title_elem:
+                            title_elem = item_li.find('h3')
+                        if title_elem:
+                            title = title_elem.get_text(strip=True)
+                    
+                    # Skip items starting with "watch" (these are watch buttons)
+                    if title and title.startswith('watch'):
+                        # Look for the actual title link
+                        for link in links:
+                            aria_label = link.get('aria-label', '')
+                            if aria_label and not aria_label.startswith('watch'):
+                                title = aria_label
+                                prdlink = link.get('href', '')
+                                break
+                    
+                    if not title or "Shop on eBay" in title:
+                        continue
+                    
+                    # Extract product ID from link
+                    if prdlink:
+                        start_index = prdlink.find("/itm/")
+                        end_index = prdlink.find("?")
+                        if end_index == -1:
+                            end_index = len(prdlink)
+                        prdid = prdlink[start_index+5:end_index] if start_index != -1 else None
+                    
+                    # Find price within the li - look for any text with $
+                    price = "N/A"
+                    price_elem = item_li.find('span', class_=lambda x: x and 's-item__price' in str(x) if x else False)
+                    if not price_elem:
+                        # Try finding any span with dollar sign
+                        price_spans = item_li.find_all('span', string=lambda x: x and '$' in str(x) if x else False)
+                        for span in price_spans:
+                            text = span.get_text(strip=True)
+                            if text.startswith('$') and 'shipping' not in text.lower():
+                                price_elem = span
+                                break
+                    
+                    if price_elem:
+                        price = price_elem.get_text(strip=True)
+                    
+                    # Find image within the li
+                    imagelink = None
+                    img_elem = item_li.find('img')
+                    if img_elem:
+                        imagelink = img_elem.get('src') or img_elem.get('data-src') or img_elem.get('data-defer-load')
+                    
                     items.append({
                         'title': title,
-                        'prdid': prdid,
+                        'prdid': prdid or "N/A",
                         'price': price,
-                        'imagelink': imagelink
+                        'imagelink': imagelink or "No image"
                     })
-            except Exception as e:
-                print(f"Error parsing item: {e}")
-                continue
-                
+                    
+                    if len(items) >= max_results_per_keyword:
+                        break
+                        
+                except Exception as e:
+                    print(f"Error parsing list item: {e}")
+                    continue
+        
+        # Method 2: Fallback - try old structure div.s-item__wrapper
+        if not items:
+            old_listings = soup.find_all('div', {'class': 's-item__wrapper'})
+            if old_listings:
+                print(f"Using fallback method, found {len(old_listings)} items")
+                for listing in old_listings[:max_results_per_keyword]:
+                    try:
+                        # Extract title
+                        title_elem = listing.find('div', {'class': 's-item__title'})
+                        if not title_elem:
+                            title_elem = listing.find('h3', {'class': 's-item__title'})
+                        title = title_elem.text.strip() if title_elem else None
+                        
+                        if not title or "Shop on eBay" in title:
+                            continue
+                        
+                        # Extract price
+                        price_elem = listing.find('span', {'class': 's-item__price'})
+                        price = price_elem.text.strip() if price_elem else "N/A"
+                        price = price.replace("$ ", "$")
+
+                        # Get the product image URL
+                        image_elem = listing.find("img")
+                        imagelink = image_elem.get('data-defer-load') if image_elem else None
+
+                        # Get the product ID
+                        prdlink_elem = listing.find("a")
+                        prdid = None
+                        if prdlink_elem:
+                            prdlink = prdlink_elem.get('href')
+                            if prdlink and "/itm/" in prdlink:
+                                start_index = prdlink.find("/itm/")
+                                end_index = prdlink.find("?")
+                                if end_index == -1:
+                                    end_index = len(prdlink)
+                                prdid = str(prdlink[start_index+5:end_index])
+
+                        items.append({
+                            'title': title,
+                            'prdid': prdid or "N/A",
+                            'price': price,
+                            'imagelink': imagelink or "No image"
+                        })
+                    except Exception as e:
+                        print(f"Error parsing item (fallback): {e}")
+                        continue
+        
+        print(f"Parsed {len(items)} items")
         return items
 
 def main():
-    # First check if Keywords.csv exists
+    # Check for Keywords.csv
     check_keywords_file()
     
-    # Get default values from environment variables
-    default_max_results = int(os.getenv('MAX_RESULTS_PER_KEYWORD', 10))
-    default_total_results = int(os.getenv('TOTAL_RESULTS', 20))
-    default_price_multiplier = float(os.getenv('PRICE_MULTIPLIER', 200))
-
-    # Prompt user for input with defaults from environment variables
-    max_results_per_keyword = int(input(f"Enter the maximum number of results per keyword (default is {default_max_results}): ") or default_max_results)
-    total_results_limit = int(input(f"Enter the maximum total number of results across all keywords (default is {default_total_results}): ") or default_total_results)
-    price_multiplier = float(input(f"Enter the price multiplier (default is {default_price_multiplier}): ") or default_price_multiplier)
-
-    scraper = EbayScraper()
-    output_file = 'output.csv'
+    # Read keywords from CSV
+    with open('Keywords.csv', 'r') as file:
+        reader = csv.DictReader(file)
+        keywords = [row['Keywords'].strip() for row in reader]
+    
+    # Filter out empty keywords
+    keywords = [k for k in keywords if k]
+    
+    print(f"Keywords to search: {keywords}")
+    
+    # User inputs
+    max_results_per_keyword = input("Enter the maximum number of results per keyword (default is 10): ")
+    max_results_per_keyword = int(max_results_per_keyword) if max_results_per_keyword else 10
+    
+    total_results_limit = input("Enter the maximum total number of results across all keywords (default is 20): ")
+    total_results_limit = int(total_results_limit) if total_results_limit else 20
+    
+    price_multiplier = input("Enter the price multiplier (default is 200.0): ")
+    price_multiplier = float(price_multiplier) if price_multiplier else 200.0
     
     print(f"Using max_results_per_keyword: {max_results_per_keyword}")
     print(f"Using total_results_limit: {total_results_limit}")
     print(f"Using price multiplier: {price_multiplier}")
     
-    # Read Keywords.csv file
-    words = pd.read_csv('Keywords.csv')
-    total_results_count = 0
-
+    scraper = EbayScraper()
+    
+    # Dictionary to store unique products (using title as key to avoid duplicates)
+    unique_products = {}
+    
     # Dictionary to store category descriptions
     category_descriptions = {}
-
-    with open(output_file, mode='w', newline='', encoding='utf-8') as outfile:
-        csv_writer = csv.writer(outfile)
-        # Write header with new column structure
-        headers = ['Image', 'Title', 'Regular Price', 'Category', 'Short_description', 'description']
-        csv_writer.writerow(headers)
-
-        for search_query in words["Keywords"]:
-            if total_results_count >= total_results_limit:
-                print(f"\nReached total results limit of {total_results_limit}. Stopping.")
-                break
-            
-            # Generate descriptions for this category if not already generated
-            if search_query not in category_descriptions:
-                print(f"\nGenerating descriptions for category: {search_query}")
-                short_desc, full_desc = generate_category_descriptions(search_query)
-                category_descriptions[search_query] = (short_desc, full_desc)
-                
-            print(f"\nSearching eBay for - {search_query}")
-            results = scraper.search(search_query, max_results_per_keyword)
+    
+    for keyword in keywords:
+        # Generate descriptions for this category once
+        if keyword not in category_descriptions:
+            print(f"Generating descriptions for category: {keyword}")
+            short_desc, full_desc = generate_category_descriptions(keyword)
+            category_descriptions[keyword] = {
+                'short': short_desc,
+                'full': full_desc
+            }
         
-            if results:
-                print(f"\nFound {len(results)} results for {search_query}\n")
-                for i, item in enumerate(results, 1):
-                    if total_results_count >= total_results_limit:
+        print(f"Searching eBay for - {keyword}")
+        results = scraper.search(keyword, max_results_per_keyword)
+        
+        if results:
+            print(f"Found {len(results)} results for {keyword}")
+            for item in results:
+                # Use title as unique key to avoid duplicates
+                unique_key = item['title']
+                if unique_key not in unique_products:
+                    item['category'] = keyword
+                    item['short_description'] = category_descriptions[keyword]['short']
+                    item['description'] = category_descriptions[keyword]['full']
+                    unique_products[unique_key] = item
+                    
+                    # Check if we've reached the total limit
+                    if len(unique_products) >= total_results_limit:
+                        print(f"Reached total results limit of {total_results_limit}")
                         break
-                    
-                    # Process the price using the user-specified multiplier
-                    processed_price = process_price(item['price'], price_multiplier)
-                    
-                    # Get the cached descriptions for this category
-                    short_desc, full_desc = category_descriptions[search_query]
-                    
-                    # Create row with new structure
-                    row = [
-                        item['imagelink'],          # Image
-                        item['title'],              # Title
-                        processed_price,            # Regular Price (processed)
-                        search_query,               # Category (using the keyword)
-                        short_desc,                 # Short_description
-                        full_desc                   # description
-                    ]
-                    csv_writer.writerow(row)
-                    total_results_count += 1
-                    print(f"Processed item {i} of {len(results)} for {search_query}")
-            else:
-                print("No results found.")
+        else:
+            print("No results found.")
         
-        print(f"\nTotal results written: {total_results_count}")
+        # Stop if we've reached the total limit
+        if len(unique_products) >= total_results_limit:
+            break
+        
+        # Small delay between searches
+        time.sleep(1)
+    
+    # Write to CSV
+    if unique_products:
+        with open('output.csv', 'w', newline='', encoding='utf-8') as csvfile:
+            fieldnames = ['Image', 'Title', 'Regular Price', 'Category', 'Short_description', 'description']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            
+            writer.writeheader()
+            for product in unique_products.values():
+                cleaned_price = clean_price(product['price'], price_multiplier)
+                writer.writerow({
+                    'Image': product['imagelink'],
+                    'Title': product['title'],
+                    'Regular Price': cleaned_price,
+                    'Category': product['category'],
+                    'Short_description': product['short_description'],
+                    'description': product['description']
+                })
+        
+        print(f"Total results written: {len(unique_products)}")
+    else:
+        # Still create empty CSV with headers if no results
+        with open('output.csv', 'w', newline='', encoding='utf-8') as csvfile:
+            fieldnames = ['Image', 'Title', 'Regular Price', 'Category', 'Short_description', 'description']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+        print("Total results written: 0")
 
 if __name__ == "__main__":
     main()
