@@ -651,6 +651,86 @@ run_aliexpress_scraper() {
     deactivate
 }
 
+
+# CSV Cleaner functions
+run_csv_cleaner() {
+    log_info "Starting CSV Cleaner..."
+    echo ""
+    
+    local cleaner_dir="$SCRIPT_DIR/csv_cleaner"
+    
+    if [ ! -d "$cleaner_dir" ]; then
+        log_error "CSV cleaner directory not found at $cleaner_dir"
+        return 1
+    fi
+    
+    # Check for CSV files in the cleaner directory or data directory
+    local csv_files=($(find "$DATA_DIR" "$cleaner_dir" -type f -name "*.csv" 2>/dev/null | head -10))
+    
+    if [ ${#csv_files[@]} -eq 0 ]; then
+        log_warning "No CSV files found in data or csv_cleaner directories"
+        echo -e "${YELLOW}Please place your CSV file in the csv_cleaner directory and try again${NC}"
+        return 1
+    fi
+    
+    echo "Available CSV files:"
+    echo "────────────────────────────────────────────"
+    for i in "${!csv_files[@]}"; do
+        local filename=$(basename "${csv_files[$i]}")
+        local filepath=$(dirname "${csv_files[$i]}")
+        echo "  $((i+1)). $filename (in $(basename "$filepath"))"
+    done
+    echo "────────────────────────────────────────────"
+    
+    echo -e "${YELLOW}Select file to clean [1-${#csv_files[@]}]: ${NC}\c"
+    read file_choice
+    
+    if [[ ! "$file_choice" =~ ^[0-9]+$ ]] || [ "$file_choice" -lt 1 ] || [ "$file_choice" -gt ${#csv_files[@]} ]; then
+        log_error "Invalid selection"
+        return 1
+    fi
+    
+    local selected_file="${csv_files[$((file_choice-1))]}"
+    local filename=$(basename "$selected_file")
+    local base_name="${filename%.*}"
+    
+    log_info "Cleaning file: $filename"
+    echo ""
+    
+    # Run the cleaner
+    cd "$cleaner_dir"
+    
+    # Copy file to cleaner directory if it's not already there
+    if [[ "$selected_file" != "$cleaner_dir"* ]]; then
+        cp "$selected_file" "$cleaner_dir/"
+        selected_file="$cleaner_dir/$(basename "$selected_file")"
+    fi
+    
+    log_info "Running CSV cleaner..."
+    python3 clean_csv.py "$selected_file"
+    
+    # Move cleaned output to data directory with timestamp
+    local cleaned_file=$(find "$cleaner_dir" -name "*cleaned*.csv" -newer "$selected_file" 2>/dev/null | head -1)
+    if [ -f "$cleaned_file" ]; then
+        local timestamp=$(date +%Y%m%d_%H%M%S)
+        local output_file="$DATA_DIR/${base_name}_cleaned_${timestamp}.csv"
+        mv "$cleaned_file" "$output_file"
+        log_success "Cleaned file saved to: $output_file"
+        
+        # Show file info
+        local original_rows=$(tail -n +2 "$selected_file" | wc -l)
+        local cleaned_rows=$(tail -n +2 "$output_file" | wc -l)
+        log_info "Original: $original_rows rows → Cleaned: $cleaned_rows rows"
+        
+        # Show sample of changes
+        # Show Windows display warning
+        echo ""
+        log_warning "Important: When viewed on Windows systems, the cleaned files may show en-dashes as garbled characters. This is a Windows display issue - the files are actually clean and correct."
+    else
+        log_error "Cleaned file not found. Check for errors above."
+    fi
+}
+
 # CSV Deduplicator functions
 run_csv_deduplicator() {
     log_info "Starting CSV/Excel Deduplicator..."
@@ -871,6 +951,7 @@ usage() {
     echo "  --test-aliexpress Quick test of AliExpress scraper with 'laptop' keyword"
     echo "  --scrape-ebay    Run eBay scraper"
     echo "  --scrape-aliexpress Run AliExpress scraper"
+    echo "  --clean-csv      Run CSV cleaner (remove bracketed names and unwanted chars)"
     echo "  --deduplicate    Run CSV/Excel deduplicator"
     echo "  --view-data      View data files"
     echo "  --cleanup        Clean temporary files and old logs"
@@ -897,17 +978,18 @@ show_menu() {
     echo "│  7. Edit Keywords.csv (eBay)                                    # Modify search keywords for eBay scraper        │"
     echo "├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     echo "│  DATA PROCESSING                                                                                                 │"
-    echo "│  8. Run CSV Deduplicator         [./run.sh --deduplicate]       # Remove duplicate rows from CSV/Excel files     │"
-    echo "│  9. View Data Files              [./run.sh --view-data]         # List all processed data files with details     │"
+    echo "│  8. Run CSV Cleaner              [./run.sh --clean-csv]         # Clean CSV files (remove names, unwanted chars) │"
+    echo "│  9. Run CSV Deduplicator         [./run.sh --deduplicate]       # Remove duplicate rows from CSV/Excel files     │"
+    echo "│  10. View Data Files             [./run.sh --view-data]         # List all processed data files with details     │"
     echo "├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     echo "│  MAINTENANCE                                                                                                     │"
-    echo "│  10. Clean Temporary Files       [./run.sh --cleanup]           # Remove cache, old logs, and temporary files    │"
-    echo "│  11. View Logs                                                  # Browse and read application log files          │"
+    echo "│  11. Clean Temporary Files       [./run.sh --cleanup]           # Remove cache, old logs, and temporary files    │"
+    echo "│  12. View Logs                                                  # Browse and read application log files          │"
     echo "├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     echo "│  0. Exit                                                                                                         │"
     echo "└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"
     echo ""
-    echo -e "${YELLOW}Select option [0-11]: ${NC}\c"
+    echo -e "${YELLOW}Select option [0-12]: ${NC}\c"
     read choice
     echo ""
 }
@@ -1018,6 +1100,10 @@ main() {
             check_python
             run_ebay_scraper
             ;;
+        --clean-csv)
+            check_python
+            run_csv_cleaner
+            ;;
         --deduplicate)
             check_python
             run_csv_deduplicator
@@ -1097,15 +1183,19 @@ main() {
                         ;;
                     8)
                         check_python
-                        run_csv_deduplicator
+                        run_csv_cleaner
                         ;;
                     9)
-                        view_data_files
+                        check_python
+                        run_csv_deduplicator
                         ;;
                     10)
-                        cleanup
+                        view_data_files
                         ;;
                     11)
+                        cleanup
+                        ;;
+                    12)
                         view_logs
                         ;;
                     0)

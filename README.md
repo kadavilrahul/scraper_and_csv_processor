@@ -31,6 +31,14 @@ bash run.sh
 - Configurable result limits per keyword
 - Clean CSV output format
 
+### CSV Cleaner
+- Remove problematic characters like `=-`, `#NAME?`, bracketed worker names
+- Clean Unicode artifacts and encoding issues
+- Preserve legitimate content like technical specifications
+- Excel-style find and replace functionality
+- Multiple cleaning methods available
+- Works with any CSV file
+
 ### CSV/Excel Deduplicator
 - Remove duplicate entries from files
 - Process both CSV and Excel formats (.csv, .xlsx, .xls)
@@ -83,6 +91,9 @@ Run specific operations directly:
 # Run eBay scraper
 ./run.sh --scrape
 
+# Clean CSV files
+./run.sh --clean-csv
+
 # Run CSV deduplicator
 ./run.sh --deduplicate
 
@@ -110,6 +121,11 @@ scraper_and_csv_processor/
 │   ├── Keywords_sample.csv    # Sample keywords file
 │   ├── Keywords.csv           # Your keywords (create from sample)
 │   └── README.md              # Tool documentation
+│
+├── csv_cleaner/               # CSV cleaning tool
+│   ├── clean_csv.py           # Comprehensive CSV cleaner
+│   ├── requirements.txt       # Python dependencies
+│   └── products.csv           # Sample file for testing
 │
 ├── excel_csv deduplicator/    # Deduplication tool
 │   ├── main.py                # Deduplicator implementation
@@ -173,6 +189,15 @@ Creates CSV files in `data/` directory with format:
   - Short_description (AI-generated)
   - description (AI-generated full description)
 
+### CSV Cleaner Output
+
+Creates cleaned CSV files in `data/` directory with format:
+- Filename: `originalname_cleaned_YYYYMMDD_HHMMSS.csv`
+- Removes: `=-` characters, `(worker names)`, `#NAME?` errors, Unicode artifacts
+- Preserves: Technical specs like `(25mm)`, `(USD)`, proper punctuation
+
+**Important**: When viewed on Windows systems, the cleaned files may show en-dashes (–) as garbled characters like `â€"`. This is a Windows display issue - the files are actually clean and correct.
+
 ### Deduplicator Output
 
 - Processes files in-place
@@ -218,6 +243,11 @@ logs/
 
 5. **Empty deduplicator directory**
    - The menu will offer to copy files from the data directory
+
+6. **Garbled characters in cleaned CSV on Windows**
+   - This is normal - characters like `â€"` are actually proper en-dashes (–)
+   - The files are correct, it's a Windows display encoding issue
+   - Use UTF-8 compatible editors or import into Excel properly
 
 ### Log Files
 
