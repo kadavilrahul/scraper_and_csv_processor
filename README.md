@@ -47,6 +47,56 @@ bash run.sh
 - Column-based deduplication (uses column B by default)
 - Detailed statistics and reporting
 
+### Slug Deduplicator
+
+**Problem Solved:** When importing products into a database with unique slug constraints, products with similar titles can generate identical slugs. For example, "Product Name!" and "Product Name" both generate slug: `product-name`, causing database import failures.
+
+**How it works:**
+1. Reads a CSV file and generates slugs for all product titles
+2. Identifies duplicate slugs
+3. Appends the product ID to duplicate titles to make them unique
+4. Outputs a fixed CSV file with unique titles/slugs
+
+**Usage:**
+```bash
+# Via menu system
+./run.sh --fix-slugs
+
+# Direct usage (if in slug_deduplicator directory)
+python fix_duplicate_slugs.py products.csv                    # Creates products_fixed.csv
+python fix_duplicate_slugs.py products.csv products_deduped.csv  # Custom output name
+python test_deduplicator.py                                   # Run test with sample data
+```
+
+**Example transformation:**
+```csv
+# Input CSV:
+id,title,description
+1001,"Product Name!","Description"
+1002,"Product Name","Description"
+
+# Output CSV:
+id,title,description
+1001,"Product Name!","Description"
+1002,"Product Name - 1002","Description"
+```
+
+**Files in slug_deduplicator/:**
+- `fix_duplicate_slugs.py` - Main deduplication script
+- `test_deduplicator.py` - Test script with sample data
+- `requirements.txt` - Python dependencies (uses standard library only)
+
+### Slug Deduplicator Output
+
+Creates fixed CSV files in `data/` directory with format:
+- Filename: `originalname_slug_fixed_YYYYMMDD_HHMMSS.csv`
+- Report file: `originalname_deduplication_report.txt`
+- Backup: `originalname_backup_YYYYMMDD_HHMMSS.csv`
+- Changes: Appends product IDs to duplicate titles to ensure unique slugs
+
+
+
+
 ## 📋 Prerequisites
 
 - **Operating System**: Linux (Ubuntu 24.04.1 LTS recommended)
@@ -74,6 +124,14 @@ pip install -r requirements.txt
 #### CSV Deduplicator:
 ```bash
 cd "excel_csv deduplicator"
+
+#### Slug Deduplicator:
+```bash
+cd slug_deduplicator
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -95,6 +153,9 @@ Run specific operations directly:
 ./run.sh --clean-csv
 
 # Run CSV deduplicator
+
+# Fix duplicate slugs in CSV files
+./run.sh --fix-slugs
 ./run.sh --deduplicate
 
 # View data files
@@ -122,6 +183,11 @@ scraper_and_csv_processor/
 │   ├── Keywords.csv           # Your keywords (create from sample)
 │   └── README.md              # Tool documentation
 │
+├── slug_deduplicator/         # Slug deduplication tool
+│   ├── fix_duplicate_slugs.py # Main deduplication script
+│   ├── test_deduplicator.py   # Test script with sample data
+│   ├── requirements.txt       # Python dependencies
+│
 ├── csv_cleaner/               # CSV cleaning tool
 │   ├── clean_csv.py           # Comprehensive CSV cleaner
 │   ├── requirements.txt       # Python dependencies
@@ -133,6 +199,11 @@ scraper_and_csv_processor/
 │   ├── data_csv/              # Input directory for files
 │   │   └── .gitkeep          # Keeps directory in git
 │   └── README.md              # Tool documentation
+│
+├── slug_deduplicator/         # Slug deduplication tool
+│   ├── fix_duplicate_slugs.py # Main deduplication script
+│   ├── test_deduplicator.py   # Test script with sample data
+│   ├── requirements.txt       # Python dependencies
 │
 ├── data/                      # Shared data output directory
 └── logs/                      # Application logs
@@ -197,6 +268,8 @@ Creates cleaned CSV files in `data/` directory with format:
 - Preserves: Technical specs like `(25mm)`, `(USD)`, proper punctuation
 
 **Important**: When viewed on Windows systems, the cleaned files may show en-dashes (–) as garbled characters like `â€"`. This is a Windows display issue - the files are actually clean and correct.
+
+
 
 ### Deduplicator Output
 

@@ -731,6 +731,91 @@ run_csv_cleaner() {
     fi
 }
 
+# Slug Deduplicator functions
+run_slug_deduplicator() {
+    log_info "Starting Slug Deduplicator..."
+    echo ""
+    
+    local slug_dir="$SCRIPT_DIR/slug_deduplicator"
+    
+    if [ ! -d "$slug_dir" ]; then
+        log_error "Slug deduplicator directory not found at $slug_dir"
+        return 1
+    fi
+    
+    # Check if venv exists, if not set it up
+    if [ ! -d "$slug_dir/venv" ] || [ ! -f "$slug_dir/venv/bin/activate" ]; then
+        log_info "Virtual environment not found. Setting up..."
+        setup_venv "$slug_dir"
+    fi
+    
+    # Check for CSV files in the data directory
+    local csv_files=($(find "$DATA_DIR" "$slug_dir" -type f -name "*.csv" 2>/dev/null | head -10))
+    
+    if [ ${#csv_files[@]} -eq 0 ]; then
+        log_warning "No CSV files found in data or slug_deduplicator directories"
+        echo -e "${YELLOW}Please place your CSV file in the data directory and try again${NC}"
+        return 1
+    fi
+    
+    echo "Available CSV files:"
+    echo "────────────────────────────────────────────"
+    for i in "${!csv_files[@]}"; do
+        local filename=$(basename "${csv_files[$i]}")
+        local filepath=$(dirname "${csv_files[$i]}")
+        echo "  $((i+1)). $filename (in $(basename "$filepath"))"
+    done
+    echo "────────────────────────────────────────────"
+    
+    echo -e "${YELLOW}Select file to fix duplicate slugs [1-${#csv_files[@]}]: ${NC}\c"
+    read file_choice
+    
+    if [[ ! "$file_choice" =~ ^[0-9]+$ ]] || [ "$file_choice" -lt 1 ] || [ "$file_choice" -gt ${#csv_files[@]} ]; then
+        log_error "Invalid selection"
+        return 1
+    fi
+    
+    local selected_file="${csv_files[$((file_choice-1))]}"
+    local filename=$(basename "$selected_file")
+    
+    log_info "Processing file: $filename"
+    echo ""
+    
+    # Run the slug deduplicator
+    cd "$slug_dir"
+    source venv/bin/activate
+    log_info "Running slug deduplicator..."
+    python3 fix_duplicate_slugs.py "$selected_file"
+    
+    # Move output to data directory
+    local fixed_file="${selected_file%.*}_fixed.csv"
+    if [ -f "$fixed_file" ]; then
+        local timestamp=$(date +%Y%m%d_%H%M%S)
+        local output_file="$DATA_DIR/$(basename "${selected_file%.*}")_slug_fixed_${timestamp}.csv"
+        mv "$fixed_file" "$output_file"
+        log_success "Fixed file saved to: $output_file"
+        
+        # Show statistics
+        local original_rows=$(tail -n +2 "$selected_file" | wc -l)
+        local fixed_rows=$(tail -n +2 "$output_file" | wc -l)
+        log_info "Processed $original_rows products"
+        
+        # Check for report file
+        local report_file="${selected_file%.*}_deduplication_report.txt"
+        if [ -f "$report_file" ]; then
+            log_info "Report saved to: $report_file"
+            echo ""
+            echo "Changes made:"
+            head -20 "$report_file"
+        fi
+    else
+        log_error "Fixed file not found. Check for errors above."
+    fi
+    
+    deactivate
+}
+
+
 # CSV Deduplicator functions
 run_csv_deduplicator() {
     log_info "Starting CSV/Excel Deduplicator..."
@@ -832,6 +917,18 @@ setup_all() {
     
     echo ""
     
+    # Setup Slug deduplicator
+    if [ -d "$SCRIPT_DIR/slug_deduplicator" ]; then
+        log_info "Setting up Slug Deduplicator..."
+        setup_venv "$SCRIPT_DIR/slug_deduplicator"
+        log_success "Slug Deduplicator setup complete"
+    else
+        log_warning "Slug deduplicator directory not found"
+    fi
+    
+    echo ""
+    
+
     # Setup CSV deduplicator
     if [ -d "$SCRIPT_DIR/excel_csv deduplicator" ]; then
         log_info "Setting up CSV Deduplicator..."
@@ -901,6 +998,7 @@ cleanup() {
 }
 
 # View data files
+                        ;;
 view_data_files() {
     log_info "Data files in $DATA_DIR:"
     echo ""
@@ -979,12 +1077,13 @@ show_menu() {
     echo "├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     echo "│  DATA PROCESSING                                                                                                 │"
     echo "│  8. Run CSV Cleaner              [./run.sh --clean-csv]         # Clean CSV files (remove names, unwanted chars) │"
-    echo "│  9. Run CSV Deduplicator         [./run.sh --deduplicate]       # Remove duplicate rows from CSV/Excel files     │"
-    echo "│  10. View Data Files             [./run.sh --view-data]         # List all processed data files with details     │"
+    echo "│  9. Run CSV Deduplicator         [./run.sh --deduplicate]       # Remove duplicate rows from CSV/Excel files     │
+│  10. Fix Duplicate Slugs         [./run.sh --fix-slugs]        # Fix duplicate slugs in product CSV files       │"
+    echo "│  11. View Data Files             [./run.sh --view-data]         # List all processed data files with details     │"
     echo "├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     echo "│  MAINTENANCE                                                                                                     │"
-    echo "│  11. Clean Temporary Files       [./run.sh --cleanup]           # Remove cache, old logs, and temporary files    │"
-    echo "│  12. View Logs                                                  # Browse and read application log files          │"
+    echo "│  12. Clean Temporary Files       [./run.sh --cleanup]           # Remove cache, old logs, and temporary files    │"
+    echo "│  13. View Logs                                                  # Browse and read application log files          │"
     echo "├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     echo "│  0. Exit                                                                                                         │"
     echo "└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"
@@ -1107,6 +1206,15 @@ main() {
         --deduplicate)
             check_python
             run_csv_deduplicator
+            exit 0
+            ;;
+        --fix-slugs)
+            check_python
+            run_slug_deduplicator
+            exit 0
+            ;;
+            check_python
+            run_csv_deduplicator
             ;;
         --view-data)
             view_data_files
@@ -1190,6 +1298,10 @@ main() {
                         run_csv_deduplicator
                         ;;
                     10)
+                        check_python
+                        run_slug_deduplicator
+                        ;;
+                    11)
                         view_data_files
                         ;;
                     11)
