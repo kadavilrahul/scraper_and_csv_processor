@@ -1,6 +1,16 @@
 # Scraper and CSV Processor Suite
 
-A comprehensive toolkit for web scraping and data processing, featuring an eBay product scraper and CSV/Excel file deduplicator.
+A comprehensive toolkit for web scraping and data processing, featuring AliExpress/eBay product scrapers and CSV/Excel file processors.
+
+## 📍 Quick Reference: Input/Output Locations
+
+| Tool | Input Location | Output Location |
+|------|---------------|-----------------|
+| **AliExpress Scraper** | `aliexpress_scraper/Keywords.csv` | `data/aliexpress_products_[timestamp].csv` |
+| **eBay Scraper** | `ebay_scraper/Keywords.csv` | `data/ebay_products_[timestamp].csv` |
+| **CSV Cleaner** | Any location (specify as argument) | `data/[filename]_cleaned_[timestamp].csv` or custom path |
+| **Excel/CSV Deduplicator** | `excel_csv_deduplicator/data_csv/` | In-place with backup in same directory |
+| **Slug Deduplicator** | Any location (specify as argument) | `data/[filename]_slug_fixed_[timestamp].csv` |
 
 
 ## 🛠️ Installation
@@ -23,6 +33,25 @@ bash run.sh
 
 ## 🚀 Features
 
+### AliExpress Scraper
+- Search AliExpress products using custom keywords
+- Extract product details (images, titles, prices, ratings)
+- Auto-categorize products based on search terms
+- Generate AI-powered descriptions using Gemini
+- Selenium-based scraping for dynamic content
+- Configurable result limits per keyword
+
+**Input/Output Locations:**
+- **Input:** Keywords file at `aliexpress_scraper/Keywords.csv` (create from `Keywords_sample.csv`)
+- **Output:** CSV files saved to `data/` directory with format `aliexpress_products_YYYYMMDD_HHMMSS.csv`
+```bash
+# Run the scraper (reads from Keywords.csv)
+cd aliexpress_scraper
+python main.py
+
+# Output will be in: ../data/aliexpress_products_[timestamp].csv
+```
+
 ### eBay Scraper
 - Search eBay products using custom keywords
 - Extract product details (images, titles, prices)
@@ -30,6 +59,17 @@ bash run.sh
 - Generate AI-powered descriptions using Gemini
 - Configurable result limits per keyword
 - Clean CSV output format
+
+**Input/Output Locations:**
+- **Input:** Keywords file at `ebay_scraper/Keywords.csv` (create from `Keywords_sample.csv`)
+- **Output:** CSV files saved to `data/` directory with format `ebay_products_YYYYMMDD_HHMMSS.csv`
+```bash
+# Run the scraper (reads from Keywords.csv)
+cd ebay_scraper
+python main.py
+
+# Output will be in: ../data/ebay_products_[timestamp].csv
+```
 
 ### CSV Cleaner
 - Remove problematic characters like `=-`, `#NAME?`, bracketed worker names
@@ -39,6 +79,19 @@ bash run.sh
 - Multiple cleaning methods available
 - Works with any CSV file
 
+**Input CSV Location:**
+The CSV file to be cleaned can be placed anywhere on your system. You provide the path as a command-line argument:
+```bash
+# CSV in the same directory as the script
+python csv_cleaner/clean_csv.py input.csv
+
+# CSV in a specific location
+python csv_cleaner/clean_csv.py /path/to/your/input.csv
+
+# Specify both input and output locations
+python csv_cleaner/clean_csv.py /path/to/input.csv /path/to/output.csv
+```
+
 ### CSV/Excel Deduplicator
 - Remove duplicate entries from files
 - Process both CSV and Excel formats (.csv, .xlsx, .xls)
@@ -46,6 +99,22 @@ bash run.sh
 - Automatic backup creation before processing
 - Column-based deduplication (uses column B by default)
 - Detailed statistics and reporting
+
+**Input/Output Locations:**
+- **Input:** Place files in `excel_csv_deduplicator/data_csv/` directory
+- **Output:** Processed files are modified in-place with backups created
+- **Backups:** Created in same directory with format `original_backup_YYYYMMDD_HHMMSS.ext`
+```bash
+# Place your files in the input directory
+cp your_file.csv "excel_csv_deduplicator/data_csv/"
+
+# Run the deduplicator
+cd excel_csv_deduplicator
+python main.py
+
+# Processed file replaces original, backup created as:
+# data_csv/your_file_backup_[timestamp].csv
+```
 
 ### Slug Deduplicator
 
@@ -57,15 +126,26 @@ bash run.sh
 3. Appends the product ID to duplicate titles to make them unique
 4. Outputs a fixed CSV file with unique titles/slugs
 
+**Input/Output Locations:**
+- **Input:** CSV file can be anywhere on your system (provide path as argument)
+- **Output:** Fixed CSV saved to `data/` directory with format `originalname_slug_fixed_YYYYMMDD_HHMMSS.csv`
+- **Report:** Deduplication report saved as `data/originalname_deduplication_report.txt`
+- **Backup:** Original file backed up as `data/originalname_backup_YYYYMMDD_HHMMSS.csv`
+
 **Usage:**
 ```bash
 # Via menu system
 ./run.sh --fix-slugs
 
-# Direct usage (if in slug_deduplicator directory)
-python fix_duplicate_slugs.py products.csv                    # Creates products_fixed.csv
-python fix_duplicate_slugs.py products.csv products_deduped.csv  # Custom output name
-python test_deduplicator.py                                   # Run test with sample data
+# Direct usage with file anywhere on system
+python slug_deduplicator/fix_duplicate_slugs.py /path/to/products.csv
+
+# Specify custom output name
+python slug_deduplicator/fix_duplicate_slugs.py products.csv custom_output.csv
+
+# Run test with sample data
+cd slug_deduplicator
+python test_deduplicator.py
 ```
 
 **Example transformation:**
@@ -176,34 +256,33 @@ scraper_and_csv_processor/
 ├── README.md                   # This file
 ├── .gitignore                  # Git ignore rules
 │
+├── aliexpress_scraper/        # AliExpress scraping tool
+│   ├── main.py                # Scraper implementation with Selenium
+│   ├── main_broken.py         # Legacy/backup version
+│   ├── requirements.txt       # Python dependencies
+│   ├── Keywords_sample.csv    # Sample keywords file
+│   └── Keywords.csv           # Your keywords (create from sample)
+│
 ├── ebay_scraper/              # eBay scraping tool
 │   ├── main.py                # Scraper implementation
 │   ├── requirements.txt       # Python dependencies
 │   ├── Keywords_sample.csv    # Sample keywords file
-│   ├── Keywords.csv           # Your keywords (create from sample)
-│   └── README.md              # Tool documentation
-│
-├── slug_deduplicator/         # Slug deduplication tool
-│   ├── fix_duplicate_slugs.py # Main deduplication script
-│   ├── test_deduplicator.py   # Test script with sample data
-│   ├── requirements.txt       # Python dependencies
+│   └── Keywords.csv           # Your keywords (create from sample)
 │
 ├── csv_cleaner/               # CSV cleaning tool
 │   ├── clean_csv.py           # Comprehensive CSV cleaner
-│   ├── requirements.txt       # Python dependencies
-│   └── products.csv           # Sample file for testing
+│   └── requirements.txt       # Python dependencies
 │
-├── excel_csv deduplicator/    # Deduplication tool
+├── excel_csv_deduplicator/    # Deduplication tool
 │   ├── main.py                # Deduplicator implementation
 │   ├── requirements.txt       # Python dependencies
-│   ├── data_csv/              # Input directory for files
-│   │   └── .gitkeep          # Keeps directory in git
-│   └── README.md              # Tool documentation
+│   └── data_csv/              # Input directory for files
+│       └── .gitkeep          # Keeps directory in git
 │
 ├── slug_deduplicator/         # Slug deduplication tool
 │   ├── fix_duplicate_slugs.py # Main deduplication script
 │   ├── test_deduplicator.py   # Test script with sample data
-│   ├── requirements.txt       # Python dependencies
+│   └── requirements.txt       # Python dependencies
 │
 ├── data/                      # Shared data output directory
 └── logs/                      # Application logs
@@ -211,6 +290,20 @@ scraper_and_csv_processor/
 ```
 
 ## 🔧 Configuration
+
+### AliExpress Scraper Keywords
+
+1. Copy the sample file:
+```bash
+cp aliexpress_scraper/Keywords_sample.csv aliexpress_scraper/Keywords.csv
+```
+
+2. Edit with your keywords (same format as eBay)
+
+3. Requirements:
+   - Selenium WebDriver (auto-installed)
+   - Chrome browser
+   - Gemini API key for descriptions
 
 ### eBay Scraper Keywords
 
