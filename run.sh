@@ -998,7 +998,6 @@ cleanup() {
 }
 
 # View data files
-                        ;;
 view_data_files() {
     log_info "Data files in $DATA_DIR:"
     echo ""
@@ -1077,8 +1076,8 @@ show_menu() {
     echo "├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     echo "│  DATA PROCESSING                                                                                                 │"
     echo "│  8. Run CSV Cleaner              [./run.sh --clean-csv]         # Clean CSV files (remove names, unwanted chars) │"
-    echo "│  9. Run CSV Deduplicator         [./run.sh --deduplicate]       # Remove duplicate rows from CSV/Excel files     │
-│  10. Fix Duplicate Slugs         [./run.sh --fix-slugs]        # Fix duplicate slugs in product CSV files       │"
+    echo "│  9. Run CSV Deduplicator         [./run.sh --deduplicate]       # Remove duplicate rows from CSV/Excel files     │"
+    echo "│  10. Fix Duplicate Slugs         [./run.sh --fix-slugs]         # Fix duplicate slugs in product CSV files       │"
     echo "│  11. View Data Files             [./run.sh --view-data]         # List all processed data files with details     │"
     echo "├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     echo "│  MAINTENANCE                                                                                                     │"
@@ -1212,9 +1211,6 @@ main() {
             check_python
             run_slug_deduplicator
             exit 0
-            ;;
-            check_python
-            run_csv_deduplicator
             ;;
         --view-data)
             view_data_files
