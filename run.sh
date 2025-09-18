@@ -652,6 +652,125 @@ run_aliexpress_scraper() {
 }
 
 
+# Clean Encoded Slugs function
+run_clean_encoded_slugs() {
+    log_info "Starting URL-Encoded Slug Cleaner..."
+    echo ""
+    
+    local cleaner_dir="$SCRIPT_DIR/csv_cleaner"
+    
+    if [ ! -d "$cleaner_dir" ]; then
+        log_error "CSV cleaner directory not found at $cleaner_dir"
+        return 1
+    fi
+    
+    # Check for the clean_encoded_slugs.py script
+    if [ ! -f "$cleaner_dir/clean_encoded_slugs.py" ]; then
+        log_error "clean_encoded_slugs.py not found in $cleaner_dir"
+        return 1
+    fi
+    
+    # Check for CSV files only in the csv_cleaner directory
+    local csv_files=($(find "$cleaner_dir" -maxdepth 1 -type f -name "*.csv" 2>/dev/null | head -20))
+    
+    if [ ${#csv_files[@]} -eq 0 ]; then
+        log_warning "No CSV files found in $cleaner_dir"
+        echo -e "${YELLOW}Please place your CSV file in the csv_cleaner directory${NC}"
+        return 1
+    fi
+    
+    echo "Available CSV files:"
+    echo "────────────────────────────────────────────────────────────────────"
+    for i in "${!csv_files[@]}"; do
+        local filename=$(basename "${csv_files[$i]}")
+        echo "  $((i+1)). $filename"
+    done
+    echo "────────────────────────────────────────────────────────────────────"
+    
+    echo -e "${YELLOW}Select file to clean encoded slugs [1-${#csv_files[@]}]: ${NC}\c"
+    read file_choice
+    
+    if [[ ! "$file_choice" =~ ^[0-9]+$ ]] || [ "$file_choice" -lt 1 ] || [ "$file_choice" -gt ${#csv_files[@]} ]; then
+        log_error "Invalid selection"
+        return 1
+    fi
+    
+    local selected_file="${csv_files[$((file_choice-1))]}"
+    local filename=$(basename "$selected_file")
+    
+    log_info "Processing file: $filename"
+    echo ""
+    
+    # Run the cleaner
+    cd "$cleaner_dir"
+    
+    log_info "Analyzing slugs for URL encoding..."
+    python3 clean_encoded_slugs.py "$selected_file"
+    
+    # Check if output file was created
+    local output_file="${selected_file%.*}_cleaned_slugs.csv"
+    if [ -f "$output_file" ]; then
+        log_success "Cleaned file saved to: $output_file"
+        
+        # Show statistics
+        echo ""
+        echo "Statistics:"
+        echo "────────────────────────────────────────────"
+        
+        # Count rows
+        local original_rows=$(tail -n +2 "$selected_file" | wc -l)
+        local cleaned_rows=$(tail -n +2 "$output_file" | wc -l)
+        echo "  Total products: $original_rows"
+        
+        # Try to show more detailed stats if Python can parse it
+        if command -v python3 &> /dev/null; then
+            python3 -c "
+import csv
+import re
+
+cleaned_count = 0
+with open('$selected_file', 'r', encoding='utf-8') as f1, open('$output_file', 'r', encoding='utf-8') as f2:
+    reader1 = csv.DictReader(f1)
+    reader2 = csv.DictReader(f2)
+    
+    # Find slug column
+    if 'slug' in reader1.fieldnames:
+        slug_col = 'slug'
+    elif 'Slug' in reader1.fieldnames:
+        slug_col = 'Slug'
+    else:
+        print('  Could not determine slug statistics')
+        exit()
+    
+    # Count changed slugs
+    for row1, row2 in zip(reader1, reader2):
+        if row1.get(slug_col) != row2.get(slug_col):
+            cleaned_count += 1
+
+print(f'  Slugs cleaned: {cleaned_count}')
+print(f'  Slugs unchanged: {$original_rows - cleaned_count}')
+" 2>/dev/null || echo "  Run completed successfully"
+        fi
+        
+        echo "────────────────────────────────────────────"
+        echo ""
+        
+        echo -e "${YELLOW}Would you like to replace the original file? (y/N): ${NC}\c"
+        read replace_original
+        
+        if [[ "$replace_original" =~ ^[Yy]$ ]]; then
+            # Backup original
+            local backup_file="${selected_file}.backup_$(date +%Y%m%d_%H%M%S)"
+            cp "$selected_file" "$backup_file"
+            log_info "Original backed up to: $(basename "$backup_file")"
+            
+            # Replace with cleaned version
+            mv "$output_file" "$selected_file"
+            log_success "Original file replaced with cleaned version"
+        fi
+    fi
+}
+
 # CSV Cleaner functions
 run_csv_cleaner() {
     log_info "Starting CSV Cleaner..."
@@ -1049,6 +1168,8 @@ usage() {
     echo "  --scrape-ebay    Run eBay scraper"
     echo "  --scrape-aliexpress Run AliExpress scraper"
     echo "  --clean-csv      Run CSV cleaner (remove bracketed names and unwanted chars)"
+    echo "  --clean-encoded  Clean URL-encoded slugs (fix %e3%80%90 and similar)"
+    echo "  --fix-slugs      Fix duplicate slugs in product CSV files"
     echo "  --deduplicate    Run CSV/Excel deduplicator"
     echo "  --view-data      View data files"
     echo "  --cleanup        Clean temporary files and old logs"
@@ -1076,18 +1197,19 @@ show_menu() {
     echo "├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     echo "│  DATA PROCESSING                                                                                                 │"
     echo "│  8. Run CSV Cleaner              [./run.sh --clean-csv]         # Clean CSV files (remove names, unwanted chars) │"
-    echo "│  9. Run CSV Deduplicator         [./run.sh --deduplicate]       # Remove duplicate rows from CSV/Excel files     │"
-    echo "│  10. Fix Duplicate Slugs         [./run.sh --fix-slugs]         # Fix duplicate slugs in product CSV files       │"
-    echo "│  11. View Data Files             [./run.sh --view-data]         # List all processed data files with details     │"
+    echo "│  9. Clean Encoded Slugs          [./run.sh --clean-encoded]     # Fix URL-encoded slugs (%e3%80%90, etc)         │"
+    echo "│  10. Run CSV Deduplicator        [./run.sh --deduplicate]       # Remove duplicate rows from CSV/Excel files     │"
+    echo "│  11. Fix Duplicate Slugs         [./run.sh --fix-slugs]         # Fix duplicate slugs in product CSV files       │"
+    echo "│  12. View Data Files             [./run.sh --view-data]         # List all processed data files with details     │"
     echo "├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     echo "│  MAINTENANCE                                                                                                     │"
-    echo "│  12. Clean Temporary Files       [./run.sh --cleanup]           # Remove cache, old logs, and temporary files    │"
-    echo "│  13. View Logs                                                  # Browse and read application log files          │"
+    echo "│  13. Clean Temporary Files       [./run.sh --cleanup]           # Remove cache, old logs, and temporary files    │"
+    echo "│  14. View Logs                                                  # Browse and read application log files          │"
     echo "├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤"
     echo "│  0. Exit                                                                                                         │"
     echo "└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"
     echo ""
-    echo -e "${YELLOW}Select option [0-12]: ${NC}\c"
+    echo -e "${YELLOW}Select option [0-14]: ${NC}\c"
     read choice
     echo ""
 }
@@ -1202,6 +1324,10 @@ main() {
             check_python
             run_csv_cleaner
             ;;
+        --clean-encoded)
+            check_python
+            run_clean_encoded_slugs
+            ;;
         --deduplicate)
             check_python
             run_csv_deduplicator
@@ -1291,19 +1417,23 @@ main() {
                         ;;
                     9)
                         check_python
-                        run_csv_deduplicator
+                        run_clean_encoded_slugs
                         ;;
                     10)
                         check_python
+                        run_csv_deduplicator
+                        ;;
+                    11)
+                        check_python
                         run_slug_deduplicator
                         ;;
-                    11)
+                    12)
                         view_data_files
                         ;;
-                    11)
+                    13)
                         cleanup
                         ;;
-                    12)
+                    14)
                         view_logs
                         ;;
                     0)
