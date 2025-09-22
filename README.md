@@ -19,7 +19,7 @@ A comprehensive toolkit for web scraping and data processing, featuring AliExpre
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/scraper_and_csv_processor.git
+git clone https://github.com/kadavilrahul/scraper_and_csv_processor.git
 ```
 ```bash
 cd scraper_and_csv_processor
